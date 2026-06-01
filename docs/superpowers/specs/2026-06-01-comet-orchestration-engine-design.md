@@ -102,40 +102,40 @@ HITL 与"自动触发"是**正交**的两个维度，不可混淆：
 
 ```yaml
 # classic.flow.yaml （示意）
-name: classic
+name: classic                 # 工作流唯一标识（供 run/list/graph 使用）
 defaults:
-  auto_advance: true        # 边级默认：自动直推
-  auto_invoke: true         # 节点级默认：到节点自动触发 skill
+  auto_advance: true          # 边级默认：transition 满足后自动推进到下一节点
+  auto_invoke: true           # 节点级默认：到达节点后自动触发绑定 skill
 
 entry:
-  router:                   # 意图识别：引擎给候选，Agent 做语义分类
-    classify_by: agent      # 默认由 Agent 语义判断（而非字面 match）
+  router:                     # 工作流入口路由器：决定从哪个入口节点开始
+    classify_by: agent        # 由 Agent 做语义分类；引擎只负责校验并路由
     intents:
-      - id: hotfix
+      - id: hotfix            # 候选意图 ID（会传给 classify_intent 动作）
         when: "用户在描述一个 bug 修复/紧急修复，且范围小（单函数或单模块）"
-        to: hotfix_build
+        to: hotfix_build      # 命中后跳转的入口节点
       - id: tweak
         when: "用户在描述文案/配置/文档/提示词的小调整"
         to: tweak_build
       - id: full
-        default: true         # 兜底：无明显意图走完整流程
+        default: true         # 兜底分支：无明显意图时走完整流程
         to: open
-    # match: 仍可作为确定性快路径/逃生口（可选），但默认走 agent 语义分类
+    # match: 可作为确定性快路径/逃生口（可选）；默认仍以 agent 语义分类为主
 
-nodes:
+nodes:                        # 每个 node 只绑定一个 skill（1 node = 1 skill）
   open:
-    phase: open               # 阶段分组标签
-    skill: openspec/opsx-new
-    exit: artifacts.proposal exists && artifacts.tasks exists
+    phase: open               # 阶段标签（仅用于分组展示/统计，不改变执行语义）
+    skill: openspec/opsx-new  # 触发的 skill 标识（交给 adapter 解析为 invoke 指令）
+    exit: artifacts.proposal exists && artifacts.tasks exists  # 退出门：未满足时不能 advance
     hitl: { when: before_advance, question: "确认提案/设计/任务？", options: [继续, 调整] }
-    produces: [proposal, design, tasks]
+    produces: [proposal, design, tasks]  # 本节点声明会产出的命名工件
 
   design:
     phase: design
     skill: superpowers/brainstorming
-    entry: artifacts.proposal exists
-    auto_invoke: false      # 节点级覆盖：先问"现在触发设计 skill 吗"
-    prompt: |               # 用户自定义提示词：注入到该 skill 触发时的上下文
+    entry: artifacts.proposal exists       # 进入门：不满足则 next 不会把当前节点定为可执行
+    auto_invoke: false                     # 节点级覆盖：先停在 gate，等用户确认再触发
+    prompt: |                              # 编排者自定义提示词：作为 handoff.prompt 传给 skill
       重点关注与现有 OpenSpec 提案的一致性；
       设计必须给出 2-3 个方案对比并显式推荐其一。
     exit: artifacts.design_doc exists
@@ -151,15 +151,15 @@ nodes:
   build_tdd:
     phase: build
     skill: superpowers/test-driven-development
-    auto_invoke: true
+    auto_invoke: true                      # 到达后自动触发（继承默认值，此处显式写出）
   build_review:
     phase: build
     skill: common/code-reviewer
-    auto_invoke: false        # 到 review 先确认再触发
+    auto_invoke: false                    # 人工审阅节点：到 review 先确认再触发
   build_commit:
     phase: build
     skill: common/git-workflow
-    exit: state.tasks_all_checked == true
+    exit: state.tasks_all_checked == true  # 阶段收口：build 所有任务完成才允许离开
     produces: [code_commits]
 
   verify:
@@ -171,28 +171,28 @@ nodes:
   archive:
     phase: archive
     skill: openspec/archive
-    terminal: true
+    terminal: true                         # 终止节点：进入后工作流结束
 
-transitions:
+transitions:                 # 有向边：描述节点间推进顺序、条件和门控策略
   - { from: open,         to: design,       auto: true }
   - { from: design,       to: build_plan,   auto: true }
   # 阶段内多 skill 串联，每步都可独立控制 auto/gate
   - { from: build_plan,   to: build_tdd,    auto: true }
   - { from: build_tdd,    to: build_review, auto: true }
   - { from: build_review, to: build_commit, auto: true }
-  - { from: build_commit, to: verify,       auto: false }           # 出 build 阶段 gate：等用户确认
-  - { from: verify,       to: archive, on: "state.verify_result == 'pass'", auto: true }
+  - { from: build_commit, to: verify,       auto: false }           # 出 build 阶段 gate：要求人工确认
+  - { from: verify,       to: archive, on: "state.verify_result == 'pass'", auto: true }  # 验证通过自动归档
   - from: verify
     to: build_plan
-    on: "state.verify_result == 'fail'"                             # 循环回退到 build 阶段入口
+    on: "state.verify_result == 'fail'"                             # 验证失败回退到 build 入口重做
     hitl: { question: "修复还是接受偏差？", options: [修复, 接受] }   # 真 HITL
 
-adapters:                   # skill 适配描述符（外部 skill 零侵入）
+adapters:                   # skill 适配描述符：描述“怎么触发/何时算完成”
   superpowers/brainstorming:
-    invoke: "Skill(superpowers:brainstorming)"
-    done_check: artifacts.design_doc exists
+    invoke: "Skill(superpowers:brainstorming)"      # 触发命令模板
+    done_check: artifacts.design_doc exists          # 完成判据（供 advance 校验）
     produces:
-      design_doc: "docs/superpowers/specs/*-design.md"
+      design_doc: "docs/superpowers/specs/*-design.md"  # 工件落盘路径模式
   superpowers/writing-plans:
     invoke: "Skill(superpowers:writing-plans)"
     done_check: artifacts.plan exists
@@ -235,11 +235,11 @@ adapters:                   # skill 适配描述符（外部 skill 零侵入）
 - 可选逃生口：仍允许 `match:` 正则作为确定性快路径，但默认走 agent 分类。
 
 ```yaml
-transitions:
+transitions:  # 流中升级判定示例：不是 on DSL，而是 classify 语义判断
   - from: hotfix_build
     to: design                # 升级跳转：补设计后回完整流程
-    classify: "本次修复是否越出单函数/模块、涉及 3+ 文件、架构变更或新公开 API？"
-    hitl: { question: "达到升级条件，转完整流程？", options: [升级, 维持 hotfix] }
+    classify: "本次修复是否越出单函数/模块、涉及 3+ 文件、架构变更或新公开 API？"  # 交给 Agent 语义判断
+    hitl: { question: "达到升级条件，转完整流程？", options: [升级, 维持 hotfix] }      # 语义命中后仍需用户确认
 ```
 
 ### 条件 DSL
