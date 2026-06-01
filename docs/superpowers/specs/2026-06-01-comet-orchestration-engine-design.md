@@ -119,12 +119,14 @@ entry:
 
 nodes:
   open:
+    phase: open               # 阶段分组标签
     skill: openspec/opsx-new
     exit: artifacts.proposal exists && artifacts.tasks exists
     hitl: { when: before_advance, question: "确认提案/设计/任务？", options: [继续, 调整] }
     produces: [proposal, design, tasks]
 
   design:
+    phase: design
     skill: superpowers/brainstorming
     entry: artifacts.proposal exists
     auto_invoke: false      # 节点级覆盖：先问"现在触发设计 skill 吗"
@@ -132,28 +134,49 @@ nodes:
     hitl: { when: before_advance, question: "确认设计方案？", options: [继续, 调整] }
     produces: [design_doc]
 
-  build:
-    skill: superpowers/subagent-driven-development
+  # build 是一个多 skill 阶段：同一 phase 的多个连续 node，每个绑定一个 skill
+  build_plan:
+    phase: build
+    skill: superpowers/writing-plans
+    exit: artifacts.plan exists
+    produces: [plan]
+  build_tdd:
+    phase: build
+    skill: superpowers/test-driven-development
+    auto_invoke: true
+  build_review:
+    phase: build
+    skill: common/code-reviewer
+    auto_invoke: false        # 到 review 先确认再触发
+  build_commit:
+    phase: build
+    skill: common/git-workflow
     exit: state.tasks_all_checked == true
     produces: [code_commits]
 
   verify:
+    phase: verify
     skill: comet/verify
     exit: state.verify_result != 'pending'
     produces: [verification_report]
 
   archive:
+    phase: archive
     skill: openspec/archive
     terminal: true
 
 transitions:
-  - { from: open,   to: design, auto: true }
-  - { from: design, to: build,  auto: true }
-  - { from: build,  to: verify, auto: false }                       # gate：等用户确认
-  - { from: verify, to: archive, on: "state.verify_result == 'pass'", auto: true }
+  - { from: open,         to: design,       auto: true }
+  - { from: design,       to: build_plan,   auto: true }
+  # 阶段内多 skill 串联，每步都可独立控制 auto/gate
+  - { from: build_plan,   to: build_tdd,    auto: true }
+  - { from: build_tdd,    to: build_review, auto: true }
+  - { from: build_review, to: build_commit, auto: true }
+  - { from: build_commit, to: verify,       auto: false }           # 出 build 阶段 gate：等用户确认
+  - { from: verify,       to: archive, on: "state.verify_result == 'pass'", auto: true }
   - from: verify
-    to: build
-    on: "state.verify_result == 'fail'"                             # 循环回退
+    to: build_plan
+    on: "state.verify_result == 'fail'"                             # 循环回退到 build 阶段入口
     hitl: { question: "修复还是接受偏差？", options: [修复, 接受] }   # 真 HITL
 
 adapters:                   # skill 适配描述符（外部 skill 零侵入）
@@ -162,10 +185,26 @@ adapters:                   # skill 适配描述符（外部 skill 零侵入）
     done_check: artifacts.design_doc exists
     produces:
       design_doc: "docs/superpowers/specs/*-design.md"
-  superpowers/subagent-driven-development:
-    invoke: "Skill(superpowers:subagent-driven-development)"
-    done_check: state.tasks_all_checked == true
+  superpowers/writing-plans:
+    invoke: "Skill(superpowers:writing-plans)"
+    done_check: artifacts.plan exists
+  common/code-reviewer:
+    invoke: "Skill(common:code-reviewer)"
+    done_check: true          # 无硬产物，触发即认完成
 ```
+
+### 6.1 多 skill 阶段（阶段分组）
+
+一个“大阶段”（如 build）往往需要编排**多个 skill**（plan → tdd → review → commit）。采用**扁平图 + 阶段分组标签**：
+
+- **保持原子不变量**：每个 skill 仍是一个 node（1 node = 1 skill = 1 done-check）。
+- **`phase` 只是分组标签**：若干连续 node 共享 `phase: build`，用于可视化与高层报告，**不引入任何新机制**。
+- **阶段内每个 skill 都可独立控制**：是否自动触发（`auto_invoke`）、之间是否要确认门（`auto`/`gate`）、是否决策（`hitl`）——完全复用已有原语。
+- **阶段级 HITL**（如“确认设计方案”）挂在阶段**最后一个 node 的 `before_advance`** 或出阶段的边上。
+- **current_node 仍是单一节点**，resume / 意图路由 / 退出门逻辑**零改动**。
+- **可视化**：`comet flow graph` 将同 `phase` 的 node 渲染成一个 subgraph 簇，视觉上“阶段框里装着多个 skill”。
+
+> 跨工作流**复用同一段 skill 序列**的子图/嵌套能力（原方案 C）当前不做，留作未来扩展（YAGNI）。
 
 ### 条件 DSL
 
@@ -222,7 +261,7 @@ SKILL.md 核心伪代码，**永不随工作流变化**：
 | `comet flow list` | 列出可用工作流 |
 | `comet flow validate <file>` | schema + 图连通性 + adapter 完整性校验 |
 | `comet flow new` / `comet flow scaffold` | 交互式生成工作流骨架 |
-| `comet flow graph <file>` | 导出**静态拓扑**：mermaid + ASCII 树，看清 skill→skill、分支/循环、每条边的触发策略 |
+| `comet flow graph <file>` | 导出**静态拓扑**：mermaid + ASCII 树，看清 skill→skill、分支/循环、每条边的触发策略；同 `phase` 的 node 渲染为 subgraph 簇 |
 | `comet flow graph --current` | **运行时叠加**：高亮 current_node、已走路径、下一跳候选（可视化断点） |
 
 ## 10. 迁移与兼容（呼应"经典模式"）
@@ -237,6 +276,7 @@ SKILL.md 核心伪代码，**永不随工作流变化**：
 - 不做 DAG/CI 式并发流水线（skill 编排本质是对话式状态推进 + 人在回路，用不上并发触发器）。
 - 不要求社区 skill 改造遵守 comet 协议（靠 adapter 适配）。
 - 不在 bash 里实现图求值 / DSL（交给 TS 引擎，bash 仅作 guard 逃生口）。
+- **不做子图/嵌套工作流**：多 skill 阶段用扁平图 + `phase` 分组标签表达；跨工作流复用同一段 skill 序列的子图能力留作未来扩展。
 
 ## 12. 开放问题（留给 plan 阶段细化）
 
