@@ -296,6 +296,57 @@ SKILL.md 核心伪代码，**永不随工作流变化**：
 
 引擎是裁判，Agent 是执行者。Agent 不再"理解编排"，只忠实执行引擎指令 —— 脆弱性消失。
 
+### 8.1 形态：控制流外置的 ReAct loop
+
+核心 SKILL.md 会从现在的"几百行散文 + 决策表"塌缩成一个**很薄的固定循环**，形态像 ReAct（observe → act → observe），但有一个关键反转：
+
+| | 经典 ReAct | comet driver |
+|---|---|---|
+| 循环形态 | Thought → Action → Observation 反复 | next → execute → advance 反复（一样） |
+| **"下一步做什么"谁决定** | **LLM 自己推理**（易漂移、易跳步） | **引擎 `comet flow next`**（确定性状态机） |
+| LLM 职责 | 又当裁判又当运动员 | **只当运动员**：触发 skill、语义判断、修 guard |
+| 脆弱性来源 | 模型要"记住"整个编排 | 编排在 YAML+引擎里，模型无需记 |
+
+即 **"控制流外置的 ReAct"**：循环骨架像 ReAct，但"该走哪一步"不再由模型即兴决定，而是引擎算好喂给它；模型只在真正需要判断处出力（意图分类、skill 内容、修复 guard 失败）。
+
+### 8.2 新 SKILL.md 示意
+
+> 措辞与动作命名在实现阶段定稿，此处给出形态。这 ~40 行**永不随工作流变化**；换/加工作流只动 `*.flow.yaml`。
+
+````markdown
+---
+name: comet
+description: 通用 skill 编排驱动器
+---
+
+# Comet 驱动循环
+
+你是编排执行器。**不要自己规划阶段顺序**——每一步都问引擎，忠实执行返回的动作。
+
+## 主循环
+
+重复以下步骤，直到 action.type == "done"：
+
+1. 运行 `comet flow next`，拿到 action（JSON）
+2. 按 action.type 执行：
+   - **invoke_skill**：用 Skill 工具**真正触发** `action.skill`，
+     以 `action.handoff`（含编排者自定义 `prompt`）为上下文。完成后 → `comet flow advance`
+   - **classify_intent**：对 `action.candidates`（每个含 `when` 自然语言判据）
+     做语义意图识别，选出最匹配 `id` → `comet flow classify <id>`
+   - **ask_user**：用 AskUserQuestion 呈现 `action.hitl.question` + `options`，
+     得到选择 → `comet flow answer <choice>`
+   - **await_confirm**：暂停，等用户说"继续" → `comet flow advance`
+   - **guard_failed**：把 `action.reason` 交给自己修复（补产物/改状态），
+     修完重试 `comet flow advance`
+   - **done**：结束
+
+## 铁律
+
+- **真正触发 skill，不是"看起来像触发"**——必须用 Skill 工具。
+- **不跳步、不自创流程**：顺序、分支、退出门全听引擎。
+- 拿不准意图就走 `classify_intent` 让引擎给候选，别自己拍脑袋路由。
+````
+
 ## 9. CLI 面
 
 ### 运行时（驱动循环 + 用户）
