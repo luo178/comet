@@ -11,32 +11,89 @@ const field = (doc: StateDocument, key: string): string | null => {
   return value === null || value === undefined ? null : String(value);
 };
 
+function requiredString(doc: StateDocument, key: string): string {
+  const value = doc[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Invalid Run state: ${key} must be a non-empty string`);
+  }
+  return value;
+}
+
+function retries(doc: StateDocument): Record<string, number> {
+  const raw = doc.run_retries ?? '{}';
+  let value: unknown;
+  try {
+    value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch (error) {
+    throw new Error('Invalid Run state: run_retries must be a JSON object', { cause: error });
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid Run state: run_retries must be a JSON object');
+  }
+  for (const count of Object.values(value)) {
+    if (!Number.isInteger(count) || Number(count) < 0) {
+      throw new Error('Invalid Run state: retry counts must be non-negative integers');
+    }
+  }
+  return value as Record<string, number>;
+}
+
 export async function readRunState(changeDir: string): Promise<RunState | null> {
   const file = path.join(changeDir, '.comet.yaml');
   const doc = parse(await fs.readFile(file, 'utf8')) as StateDocument;
   if (!doc.run_id) return null;
+  const runId = requiredString(doc, 'run_id');
+  const skill = requiredString(doc, 'skill');
+  const skillVersion = requiredString(doc, 'skill_version');
+  const skillHash = requiredString(doc, 'skill_hash');
+  const pendingRef = requiredString(doc, 'pending_ref');
+  const trajectoryRef = requiredString(doc, 'trajectory_ref');
+  const contextRef = requiredString(doc, 'context_ref');
+  const artifactsRef = requiredString(doc, 'artifacts_ref');
+  const checkpointRef = requiredString(doc, 'checkpoint_ref');
+  const iteration = Number(doc.iteration);
+  if (!Number.isInteger(iteration) || iteration < 0) {
+    throw new Error('Invalid Run state: iteration must be a non-negative integer');
+  }
+  if (doc.orchestration !== 'deterministic' && doc.orchestration !== 'adaptive') {
+    throw new Error('Invalid Run state: orchestration must be deterministic or adaptive');
+  }
+  if (
+    doc.run_status !== 'running' &&
+    doc.run_status !== 'waiting' &&
+    doc.run_status !== 'completed' &&
+    doc.run_status !== 'failed'
+  ) {
+    throw new Error('Invalid Run state: run_status is invalid');
+  }
   return {
-    runId: String(doc.run_id),
-    skill: String(doc.skill),
-    skillVersion: String(doc.skill_version),
-    skillHash: String(doc.skill_hash),
-    orchestration: doc.orchestration as RunState['orchestration'],
+    runId,
+    skill,
+    skillVersion,
+    skillHash,
+    orchestration: doc.orchestration,
     currentStep: field(doc, 'current_step'),
-    iteration: Number(doc.iteration ?? 0),
+    iteration,
     pending: field(doc, 'pending'),
-    pendingRef: String(doc.pending_ref),
-    trajectoryRef: String(doc.trajectory_ref),
-    contextRef: String(doc.context_ref),
-    artifactsRef: String(doc.artifacts_ref),
-    checkpointRef: String(doc.checkpoint_ref),
-    status: (doc.run_status ?? 'running') as RunState['status'],
-    retries: doc.run_retries ? JSON.parse(String(doc.run_retries)) : {},
+    pendingRef,
+    trajectoryRef,
+    contextRef,
+    artifactsRef,
+    checkpointRef,
+    status: doc.run_status,
+    retries: retries(doc),
   };
 }
 
 export async function writeRunState(changeDir: string, state: RunState): Promise<void> {
   const file = path.join(changeDir, '.comet.yaml');
-  const raw = await fs.readFile(file, 'utf8').catch(() => '');
+  let raw: string;
+  try {
+    raw = await fs.readFile(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    raw = '';
+  }
   const doc = (raw ? parse(raw) : {}) as StateDocument;
   Object.assign(doc, {
     run_id: state.runId,

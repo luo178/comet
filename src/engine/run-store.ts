@@ -21,6 +21,15 @@ async function atomicWrite(file: string, content: string): Promise<void> {
   await fs.rename(temporary, file);
 }
 
+async function readOptionalText(file: string): Promise<string | null> {
+  try {
+    return await fs.readFile(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 export async function appendTrajectory(
   changeDir: string,
   relativePath: string,
@@ -29,6 +38,25 @@ export async function appendTrajectory(
   const file = resolveRunPath(changeDir, relativePath);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.appendFile(file, JSON.stringify(event) + '\n', 'utf8');
+}
+
+export async function readTrajectory(
+  changeDir: string,
+  relativePath: string,
+): Promise<TrajectoryEvent[]> {
+  const raw = await readOptionalText(resolveRunPath(changeDir, relativePath));
+  if (raw === null) return [];
+  return raw
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, number: index + 1 }))
+    .filter(({ line }) => line.length > 0)
+    .map(({ line, number }) => {
+      try {
+        return JSON.parse(line) as TrajectoryEvent;
+      } catch (error) {
+        throw new Error(`Invalid Trajectory event at line ${number}`, { cause: error });
+      }
+    });
 }
 
 export async function readArtifacts(
@@ -60,6 +88,10 @@ export async function writeContext(
   context: string,
 ): Promise<void> {
   await atomicWrite(resolveRunPath(changeDir, relativePath), context);
+}
+
+export async function readContext(changeDir: string, relativePath: string): Promise<string | null> {
+  return readOptionalText(resolveRunPath(changeDir, relativePath));
 }
 
 export async function writePendingAction(
@@ -94,4 +126,12 @@ export async function writeCheckpoint(
     resolveRunPath(changeDir, relativePath),
     JSON.stringify(checkpoint, null, 2) + '\n',
   );
+}
+
+export async function readCheckpoint(
+  changeDir: string,
+  relativePath: string,
+): Promise<Checkpoint | null> {
+  const raw = await readOptionalText(resolveRunPath(changeDir, relativePath));
+  return raw === null ? null : (JSON.parse(raw) as Checkpoint);
 }

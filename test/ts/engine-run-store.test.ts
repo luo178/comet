@@ -5,7 +5,10 @@ import path from 'path';
 import {
   appendTrajectory,
   readArtifacts,
+  readCheckpoint,
+  readContext,
   readPendingAction,
+  readTrajectory,
   writeArtifacts,
   writeCheckpoint,
   writeContext,
@@ -57,9 +60,27 @@ describe('run store', () => {
       report: 'report.md',
     });
     expect(await readPendingAction(changeDir, '.comet/pending-action.json')).toEqual(action);
-    expect(
-      (await fs.readFile(path.join(changeDir, '.comet/trajectory.jsonl'), 'utf8')).trim(),
-    ).toBe(JSON.stringify(event));
+    expect(await readContext(changeDir, '.comet/context.md')).toBe('# Context\n');
+    expect(await readCheckpoint(changeDir, '.comet/checkpoint.json')).toEqual(checkpoint);
+    expect(await readTrajectory(changeDir, '.comet/trajectory.jsonl')).toEqual([event]);
+  });
+
+  it('returns empty recovery values when optional Run files do not exist', async () => {
+    expect(await readArtifacts(changeDir, '.comet/artifacts.json')).toEqual({});
+    expect(await readContext(changeDir, '.comet/context.md')).toBeNull();
+    expect(await readPendingAction(changeDir, '.comet/pending-action.json')).toBeNull();
+    expect(await readCheckpoint(changeDir, '.comet/checkpoint.json')).toBeNull();
+    expect(await readTrajectory(changeDir, '.comet/trajectory.jsonl')).toEqual([]);
+  });
+
+  it('reports the malformed Trajectory line during recovery', async () => {
+    const file = path.join(changeDir, '.comet', 'trajectory.jsonl');
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, '{"sequence":1}\nnot-json\n');
+
+    await expect(readTrajectory(changeDir, '.comet/trajectory.jsonl')).rejects.toThrow(
+      'Invalid Trajectory event at line 2',
+    );
   });
 
   it('rejects paths outside the change directory', async () => {
