@@ -1,5 +1,6 @@
 export * from './classic-evidence.js';
 export * from './classic-cli.js';
+export * from './classic-guard.js';
 export * from './classic-state-command.js';
 export * from './classic-validate-command.js';
 export * from './classic-migrate.js';

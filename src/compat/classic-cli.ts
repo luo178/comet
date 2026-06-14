@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'url';
+import { classicGuardCommand } from './classic-guard.js';
 import { classicStateCommand } from './classic-state-command.js';
 import { classicValidateCommand } from './classic-validate-command.js';
 
@@ -33,6 +34,7 @@ export type ClassicCommandName = (typeof CLASSIC_COMMANDS)[number];
 const DEFAULT_HANDLERS: ClassicCommandHandlers = {
   state: classicStateCommand,
   validate: classicValidateCommand,
+  guard: classicGuardCommand,
 };
 
 function isClassicCommand(value: string): value is ClassicCommandName {

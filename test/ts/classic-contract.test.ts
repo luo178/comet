@@ -154,6 +154,40 @@ async function observeState(
   };
 }
 
+interface GuardObservation {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+async function observeGuard(
+  sourceScripts: string,
+  profile: 'full' | 'hotfix' | 'tweak',
+  phase: string,
+): Promise<GuardObservation> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), `comet-guard-${profile}-`));
+  temporaryRoots.push(root);
+  const scripts = path.join(root, 'scripts');
+  await copyScripts(sourceScripts, scripts);
+
+  const name = `${profile}-guard`;
+  const init = runScript(root, scripts, 'comet-state.sh', ['init', name, profile]);
+  if (init.status !== 0) {
+    return {
+      status: init.status,
+      stdout: normalizeOutput(init.stdout, root),
+      stderr: normalizeOutput(init.stderr, root),
+    };
+  }
+
+  const result = runScript(root, scripts, 'comet-guard.sh', [name, phase]);
+  return {
+    status: result.status,
+    stdout: normalizeOutput(result.stdout, root),
+    stderr: normalizeOutput(result.stderr, root),
+  };
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryRoots
@@ -198,4 +232,12 @@ describeBash('Classic 0.3.8 differential contract', () => {
       await observeState(referenceScripts, 'full', ['transition', 'build-complete']),
     );
   });
+
+  for (const profile of ['full', 'hotfix', 'tweak'] as const) {
+    it(`preserves ${profile} open guard block`, async () => {
+      expect(await observeGuard(activeScripts, profile, 'open')).toEqual(
+        await observeGuard(referenceScripts, profile, 'open'),
+      );
+    });
+  }
 });

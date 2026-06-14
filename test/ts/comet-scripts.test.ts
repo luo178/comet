@@ -143,19 +143,21 @@ async function createFakeOpenSpecArchive(tmpDir: string, archiveDateScript = 'da
 const describeShell = bashCommand ? describe : describe.skip;
 
 describe('comet shell script contracts', () => {
-  it('keeps state and validation scripts as runtime-only facades', async () => {
+  it('keeps state, validation, and guard scripts as runtime-only facades', async () => {
     const envSource = await fs.readFile(path.join(scriptsDir, 'comet-env.sh'), 'utf-8');
     const stateSource = await fs.readFile(path.join(scriptsDir, 'comet-state.sh'), 'utf-8');
     const validateSource = await fs.readFile(
       path.join(scriptsDir, 'comet-yaml-validate.sh'),
       'utf-8',
     );
+    const guardSource = await fs.readFile(path.join(scriptsDir, 'comet-guard.sh'), 'utf-8');
 
     expect(stateSource).toContain('exec node "$COMET_RUNTIME" state "$@"');
     expect(validateSource).toContain('exec node "$COMET_RUNTIME" validate "$@"');
+    expect(guardSource).toContain('exec node "$COMET_RUNTIME" guard "$@"');
     expect(envSource).toContain('export COMET_RUNTIME=');
     expect(envSource).not.toContain('BASH_SOURCE[0]');
-    for (const source of [stateSource, validateSource]) {
+    for (const source of [stateSource, validateSource, guardSource]) {
       expect(source).not.toMatch(/grep|awk|sed|yaml_field|KNOWN_KEYS|cmd_transition/u);
     }
   });
@@ -1866,24 +1868,11 @@ describeShell('comet shell scripts', () => {
       JSON.stringify({ scripts: { build: 'node -e "process.exit(0)"' } }),
     );
 
-    const probeScript = path.join(tmpDir, 'scripts', 'probe-plan-tasks.sh');
-    await writeFile(
-      probeScript,
-      [
-        '#!/bin/bash',
-        'set -euo pipefail',
-        'export COMET_GUARD_SOURCE_ONLY=1',
-        'CHANGE=unfinished-plan-tasks',
-        'CHANGE_DIR=openspec/changes/unfinished-plan-tasks',
-        '. ./scripts/comet-guard.sh',
-        'plan_tasks_all_done',
-        '',
-      ].join('\n'),
-    );
-
-    const result = runBash(tmpDir, probeScript);
+    const result = runBash(tmpDir, guardScript, ['unfinished-plan-tasks', 'build']);
 
     expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('[FAIL] Superpowers plan all tasks checked');
+    expect(result.stderr).toContain('Unfinished Superpowers plan tasks:');
     expect(result.stderr).toContain('pending plan task');
     expect(result.stderr).toContain('Next: check off corresponding completed plan tasks');
   }, 20_000);
@@ -2126,13 +2115,13 @@ describeShell('comet shell scripts', () => {
   });
 
   it('keeps optional YAML field reads safe under pipefail', async () => {
-    // comet-state.sh is now a runtime facade; its YAML reads happen in the
-    // TypeScript runtime (structured parser, no grep). comet-guard.sh still
-    // reads YAML via grep until Task 11 migrates it, so guard its pipefail safety.
-    for (const name of ['comet-guard.sh']) {
+    // comet-state.sh, comet-guard.sh, and comet-yaml-validate.sh are runtime
+    // facades (structured parser, no grep). comet-handoff.sh and comet-archive.sh
+    // still read YAML via grep until their migration, so guard their pipefail safety.
+    for (const name of ['comet-handoff.sh', 'comet-archive.sh']) {
       const content = await fs.readFile(path.join(tmpDir, 'scripts', name), 'utf-8');
 
-      expect(content).toMatch(/grep "\^\$\{field\}:" "\$[a-z_]+".*\|\| true\)/);
+      expect(content).toMatch(/grep "\^\$\{field\}:" "\$[a-zA-Z_]+".*\|\| true\)/);
     }
   });
 
