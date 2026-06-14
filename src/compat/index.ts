@@ -1,5 +1,7 @@
 export * from './classic-evidence.js';
 export * from './classic-cli.js';
+export * from './classic-state-command.js';
+export * from './classic-validate-command.js';
 export * from './classic-migrate.js';
 export * from './classic-resolver.js';
 export * from './classic-state.js';

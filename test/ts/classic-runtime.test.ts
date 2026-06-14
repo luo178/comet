@@ -104,4 +104,70 @@ describe('Classic runtime bundle', () => {
     expect(check.status, check.stderr || check.stdout).toBe(0);
     expect(manifest.skills).toContain('comet/scripts/comet-runtime.mjs');
   });
+
+  it('executes state and validation commands from a standalone project', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'comet-runtime-state-'));
+    temporaryDirectories.push(directory);
+
+    const init = spawnSync(process.execPath, [runtime, 'state', 'init', 'demo', 'full'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+    const get = spawnSync(process.execPath, [runtime, 'state', 'get', 'demo', 'phase'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+    const set = spawnSync(
+      process.execPath,
+      [runtime, 'state', 'set', 'demo', 'build_mode', 'executing-plans'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+    const transition = spawnSync(
+      process.execPath,
+      [runtime, 'state', 'transition', 'demo', 'open-complete'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+    const next = spawnSync(process.execPath, [runtime, 'state', 'next', 'demo'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+    const validate = spawnSync(process.execPath, [runtime, 'validate', 'demo'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+
+    expect(init.status).toBe(0);
+    expect(get).toMatchObject({ status: 0, stdout: 'open\n' });
+    expect(set.status).toBe(0);
+    expect(transition.status).toBe(0);
+    expect(next.stdout).toContain('SKILL: comet-design');
+    expect(validate.status).toBe(0);
+    expect(validate.stderr).toContain('validation PASSED');
+  });
+
+  it('keeps task-checkoff validation in the TypeScript state command', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'comet-runtime-task-'));
+    temporaryDirectories.push(directory);
+    await fs.mkdir(path.join(directory, 'docs'), { recursive: true });
+    await fs.writeFile(
+      path.join(directory, 'docs', 'plan.md'),
+      '- [x] Implement runtime facade\n- [ ] Continue migration\n',
+    );
+
+    const pass = spawnSync(
+      process.execPath,
+      [runtime, 'state', 'task-checkoff', 'docs/plan.md', 'Implement runtime facade'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+    const fail = spawnSync(
+      process.execPath,
+      [runtime, 'state', 'task-checkoff', 'docs/plan.md', 'Continue migration'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+
+    expect(pass.status).toBe(0);
+    expect(pass.stdout).toContain('TASK_CHECKOFF: PASS');
+    expect(fail.status).toBe(1);
+    expect(fail.stderr).toContain('task is not checked');
+  });
 });

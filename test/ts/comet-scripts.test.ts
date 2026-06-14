@@ -143,16 +143,21 @@ async function createFakeOpenSpecArchive(tmpDir: string, archiveDateScript = 'da
 const describeShell = bashCommand ? describe : describe.skip;
 
 describe('comet shell script contracts', () => {
-  it('defines task-checkoff as a state-script command', async () => {
+  it('keeps state and validation scripts as runtime-only facades', async () => {
+    const envSource = await fs.readFile(path.join(scriptsDir, 'comet-env.sh'), 'utf-8');
     const stateSource = await fs.readFile(path.join(scriptsDir, 'comet-state.sh'), 'utf-8');
+    const validateSource = await fs.readFile(
+      path.join(scriptsDir, 'comet-yaml-validate.sh'),
+      'utf-8',
+    );
 
-    expect(stateSource).toContain('cmd_task_checkoff()');
-    expect(stateSource).toContain('validate_path_field "$task_file" "task file"');
-    expect(stateSource).toContain('TASK_TEXT="$task_text" awk');
-    expect(stateSource).toContain('task text must appear exactly once');
-    expect(stateSource).toContain('task is not checked');
-    expect(stateSource).toContain('task-checkoff)');
-    expect(stateSource).toContain('cmd_task_checkoff "$@"');
+    expect(stateSource).toContain('exec node "$COMET_RUNTIME" state "$@"');
+    expect(validateSource).toContain('exec node "$COMET_RUNTIME" validate "$@"');
+    expect(envSource).toContain('export COMET_RUNTIME=');
+    expect(envSource).not.toContain('BASH_SOURCE[0]');
+    for (const source of [stateSource, validateSource]) {
+      expect(source).not.toMatch(/grep|awk|sed|yaml_field|KNOWN_KEYS|cmd_transition/u);
+    }
   });
 });
 
@@ -178,6 +183,7 @@ describeShell('comet shell scripts', () => {
       'comet-state.sh',
       'comet-yaml-validate.sh',
       'comet-hook-guard.sh',
+      'comet-runtime.mjs',
     ]) {
       const content = await fs.readFile(path.join(scriptsDir, name), 'utf-8');
       await fs.writeFile(path.join(tmpScriptsDir, name), content.replace(/\r\n/g, '\n'));
@@ -2120,7 +2126,10 @@ describeShell('comet shell scripts', () => {
   });
 
   it('keeps optional YAML field reads safe under pipefail', async () => {
-    for (const name of ['comet-state.sh', 'comet-guard.sh']) {
+    // comet-state.sh is now a runtime facade; its YAML reads happen in the
+    // TypeScript runtime (structured parser, no grep). comet-guard.sh still
+    // reads YAML via grep until Task 11 migrates it, so guard its pipefail safety.
+    for (const name of ['comet-guard.sh']) {
       const content = await fs.readFile(path.join(tmpDir, 'scripts', name), 'utf-8');
 
       expect(content).toMatch(/grep "\^\$\{field\}:" "\$[a-z_]+".*\|\| true\)/);

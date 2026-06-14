@@ -69,6 +69,14 @@ async function copyScripts(source: string, destination: string): Promise<void> {
       await fs.copyFile(path.join(source, name), path.join(destination, name));
     }),
   );
+  try {
+    await fs.copyFile(
+      path.join(source, 'comet-runtime.mjs'),
+      path.join(destination, 'comet-runtime.mjs'),
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 function runScript(cwd: string, scripts: string, name: string, args: string[]) {

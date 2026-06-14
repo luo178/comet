@@ -22,7 +22,13 @@ async function bundledRuntime() {
     legalComments: 'none',
     charset: 'utf8',
     treeShaking: true,
-    banner: { js: '#!/usr/bin/env node' },
+    banner: {
+      js: [
+        '#!/usr/bin/env node',
+        "import { createRequire as __cometCreateRequire } from 'module';",
+        'const require = __cometCreateRequire(import.meta.url);',
+      ].join('\n'),
+    },
   });
 
   if (result.outputFiles.length !== 1) {

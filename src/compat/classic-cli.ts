@@ -1,4 +1,6 @@
 import { pathToFileURL } from 'url';
+import { classicStateCommand } from './classic-state-command.js';
+import { classicValidateCommand } from './classic-validate-command.js';
 
 export interface ClassicCommandResult {
   exitCode: number;
@@ -27,6 +29,11 @@ export const CLASSIC_COMMANDS = [
 ] as const;
 
 export type ClassicCommandName = (typeof CLASSIC_COMMANDS)[number];
+
+const DEFAULT_HANDLERS: ClassicCommandHandlers = {
+  state: classicStateCommand,
+  validate: classicValidateCommand,
+};
 
 function isClassicCommand(value: string): value is ClassicCommandName {
   return CLASSIC_COMMANDS.includes(value as ClassicCommandName);
@@ -88,7 +95,7 @@ function jsonResult(
 
 export async function runClassicCli(
   argv: readonly string[],
-  handlers: ClassicCommandHandlers = {},
+  handlers: ClassicCommandHandlers = DEFAULT_HANDLERS,
 ): Promise<ClassicCommandResult> {
   const json = argv.includes('--json');
   const args = argv.filter((argument) => argument !== '--json');
