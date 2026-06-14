@@ -10595,14 +10595,14 @@ var EVENTS = [
   "archive-reopen",
   "archived"
 ];
-var SETTABLE_FIELDS = /* @__PURE__ */ new Set([
-  ...CLASSIC_WIRE_KEYS,
+var MACHINE_OWNED_FIELDS = /* @__PURE__ */ new Set([
   ...RUN_WIRE_KEYS,
-  "direct_override",
-  "build_command",
-  "verify_command",
-  "base_ref"
+  "classic_profile",
+  "classic_migration"
 ]);
+var SETTABLE_FIELDS = new Set(
+  CLASSIC_WIRE_KEYS.filter((field2) => !MACHINE_OWNED_FIELDS.has(field2))
+);
 var FIELD_ENUMS = {
   workflow: PROFILES,
   phase: PHASES3,
@@ -10813,14 +10813,51 @@ function validateSetValue(field2, value) {
   }
 }
 async function setField(output, name, field2, value) {
+  if (MACHINE_OWNED_FIELDS.has(field2)) {
+    fail2(`ERROR: '${field2}' is a machine-owned Run field and cannot be set directly`);
+  }
   if (!SETTABLE_FIELDS.has(field2)) {
     fail2(`ERROR: Unknown field: '${field2}'`);
   }
   validateSetValue(field2, value);
-  const { file } = await stateFile(name);
+  const { file, directory } = await stateFile(name);
   const document = await readDocument2(file);
   document.set(field2, parsedValue(field2, value));
-  await atomicWrite2(file, document.toString());
+  const projection = parseClassicStateDocument(document.toJS());
+  if (projection.run) {
+    if (!projection.classic) fail2("ERROR: migrated Run is missing its Classic projection");
+    const evidence = await collectClassicEvidence(directory, projection);
+    const currentStep = resolveClassicStepId(projection.classic, evidence);
+    const stepChanged = currentStep !== projection.run.currentStep;
+    const run = {
+      ...projection.run,
+      currentStep,
+      iteration: projection.run.iteration + (stepChanged ? 1 : 0),
+      status: currentStep === "completed" ? "completed" : "running"
+    };
+    await writeClassicState(directory, {
+      classic: projection.classic,
+      run,
+      unknownKeys: projection.unknownKeys
+    });
+    if (stepChanged) {
+      const trajectory = await readTrajectory(directory, run.trajectoryRef);
+      await appendTrajectory(directory, run.trajectoryRef, {
+        sequence: trajectory.length + 1,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        type: "state_transitioned",
+        runId: run.runId,
+        data: {
+          kind: "classic-config",
+          field: field2,
+          fromStep: projection.run.currentStep,
+          toStep: currentStep
+        }
+      });
+    }
+  } else {
+    await atomicWrite2(file, document.toString());
+  }
   if (field2 === "phase") {
     output.stderr.push(
       yellow4("WARNING: Setting 'phase' directly bypasses state machine constraints."),

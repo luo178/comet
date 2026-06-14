@@ -3,7 +3,7 @@ import { existsSync, promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 
 const runtime = path.resolve('assets', 'skills', 'comet', 'scripts', 'comet-runtime.mjs');
 const temporary: string[] = [];
@@ -133,7 +133,8 @@ describe('Classic handoff command', () => {
         ref: hash,
       }),
     );
-    run(dir, 'state', 'set', 'demo', 'pending', actionId);
+    state.pending = actionId;
+    await fs.writeFile(path.join(changeDir, '.comet.yaml'), stringify(state));
 
     const result = run(dir, 'handoff', 'demo', 'design', '--write');
     expect(result.status).toBe(0);

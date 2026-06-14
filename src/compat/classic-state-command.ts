@@ -4,7 +4,11 @@ import { existsSync, promises as fs } from 'fs';
 import path from 'path';
 import { Document, parseDocument } from 'yaml';
 import type { ClassicCommandHandler, ClassicCommandResult } from './classic-cli.js';
-import { CLASSIC_WIRE_KEYS, RUN_WIRE_KEYS } from './classic-state.js';
+import { collectClassicEvidence } from './classic-evidence.js';
+import { resolveClassicStepId } from './classic-resolver.js';
+import { CLASSIC_WIRE_KEYS, RUN_WIRE_KEYS, parseClassicStateDocument } from './classic-state.js';
+import { writeClassicState } from './classic-store.js';
+import { appendTrajectory, readTrajectory } from '../engine/run-store.js';
 
 const GREEN = '\u001b[32m';
 const RED = '\u001b[31m';
@@ -21,14 +25,14 @@ const EVENTS = [
   'archive-reopen',
   'archived',
 ] as const;
-const SETTABLE_FIELDS = new Set<string>([
-  ...CLASSIC_WIRE_KEYS,
+const MACHINE_OWNED_FIELDS = new Set<string>([
   ...RUN_WIRE_KEYS,
-  'direct_override',
-  'build_command',
-  'verify_command',
-  'base_ref',
+  'classic_profile',
+  'classic_migration',
 ]);
+const SETTABLE_FIELDS = new Set<string>(
+  CLASSIC_WIRE_KEYS.filter((field) => !MACHINE_OWNED_FIELDS.has(field)),
+);
 
 const FIELD_ENUMS: Record<string, readonly string[]> = {
   workflow: PROFILES,
@@ -280,14 +284,51 @@ async function setField(
   field: string,
   value: string,
 ): Promise<void> {
+  if (MACHINE_OWNED_FIELDS.has(field)) {
+    fail(`ERROR: '${field}' is a machine-owned Run field and cannot be set directly`);
+  }
   if (!SETTABLE_FIELDS.has(field)) {
     fail(`ERROR: Unknown field: '${field}'`);
   }
   validateSetValue(field, value);
-  const { file } = await stateFile(name);
+  const { file, directory } = await stateFile(name);
   const document = await readDocument(file);
   document.set(field, parsedValue(field, value));
-  await atomicWrite(file, document.toString());
+  const projection = parseClassicStateDocument(document.toJS() as Record<string, unknown>);
+  if (projection.run) {
+    if (!projection.classic) fail('ERROR: migrated Run is missing its Classic projection');
+    const evidence = await collectClassicEvidence(directory, projection);
+    const currentStep = resolveClassicStepId(projection.classic, evidence);
+    const stepChanged = currentStep !== projection.run.currentStep;
+    const run = {
+      ...projection.run,
+      currentStep,
+      iteration: projection.run.iteration + (stepChanged ? 1 : 0),
+      status: currentStep === 'completed' ? ('completed' as const) : ('running' as const),
+    };
+    await writeClassicState(directory, {
+      classic: projection.classic,
+      run,
+      unknownKeys: projection.unknownKeys,
+    });
+    if (stepChanged) {
+      const trajectory = await readTrajectory(directory, run.trajectoryRef);
+      await appendTrajectory(directory, run.trajectoryRef, {
+        sequence: trajectory.length + 1,
+        timestamp: new Date().toISOString(),
+        type: 'state_transitioned',
+        runId: run.runId,
+        data: {
+          kind: 'classic-config',
+          field,
+          fromStep: projection.run.currentStep,
+          toStep: currentStep,
+        },
+      });
+    }
+  } else {
+    await atomicWrite(file, document.toString());
+  }
   if (field === 'phase') {
     output.stderr.push(
       yellow("WARNING: Setting 'phase' directly bypasses state machine constraints."),

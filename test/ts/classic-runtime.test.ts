@@ -166,4 +166,59 @@ describe('Classic runtime bundle', () => {
     expect(fail.status).toBe(1);
     expect(fail.stderr).toContain('task is not checked');
   });
+
+  it('rejects direct writes to machine-owned Run fields', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'comet-runtime-owned-'));
+    temporaryDirectories.push(directory);
+    spawnSync(process.execPath, [runtime, 'state', 'init', 'demo', 'full'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+
+    const result = spawnSync(
+      process.execPath,
+      [runtime, 'state', 'set', 'demo', 'current_step', 'completed'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('machine-owned Run field');
+  });
+
+  it('re-resolves the Run step when migrated Classic configuration changes', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'comet-runtime-sync-'));
+    temporaryDirectories.push(directory);
+    spawnSync(process.execPath, [runtime, 'state', 'init', 'demo', 'full'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+    spawnSync(process.execPath, [runtime, 'state', 'set', 'demo', 'phase', 'build'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+    const hook = spawnSync(process.execPath, [runtime, 'hook-guard'], {
+      cwd: directory,
+      encoding: 'utf8',
+      input: JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'src/index.ts' },
+      }),
+    });
+    expect(hook.status).toBe(0);
+    await fs.mkdir(path.join(directory, 'docs'), { recursive: true });
+    await fs.writeFile(path.join(directory, 'docs', 'plan.md'), '- [ ] implement\n');
+
+    const set = spawnSync(
+      process.execPath,
+      [runtime, 'state', 'set', 'demo', 'plan', 'docs/plan.md'],
+      { cwd: directory, encoding: 'utf8' },
+    );
+    const step = spawnSync(process.execPath, [runtime, 'state', 'get', 'demo', 'current_step'], {
+      cwd: directory,
+      encoding: 'utf8',
+    });
+
+    expect(set.status).toBe(0);
+    expect(step.stdout.trim()).toBe('full.build.configure');
+  });
 });

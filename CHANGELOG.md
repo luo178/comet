@@ -20,6 +20,7 @@ All notable changes to @rpamis/comet will be documented in this file.
 ### Fixed
 
 - **Atomic Classic migration and transitions**: Legacy changes now gain one stable `comet-classic` Run, immutable Skill snapshot, synchronized compatibility projection, and non-duplicated migration/transition Trajectory events; repeated entry is byte-idempotent and invalid strict-entry state fails closed.
+- **Machine-owned Run projection**: `comet-state set` now rejects direct writes to Run identity and execution fields; after migration, supported Classic configuration changes re-resolve the stable step and atomically update both projections so status and recovery cannot drift.
 - **Recoverable handoff and archive transactions**: Handoff persists Context, Artifacts, checkpoint, and PendingWork before advancing to `full.design.document`; archive records pending work before invoking OpenSpec and reconciles an already-moved change without repeating the irreversible operation.
 - **Immutable Skill snapshots**: Skill hashes now include `SKILL.md` and declared script Tool bytes, snapshots copy every executable script into a content-addressed directory, publication is atomic, and existing snapshot contents are revalidated before reuse so a running Run cannot be silently changed by later Skill edits or corrupted storage.
 - **Fail-closed Run recovery**: Run state writes now ignore only missing state files, malformed or incomplete Run projections are rejected with actionable errors, and corrupt deterministic steps can no longer be mistaken for successful completion.

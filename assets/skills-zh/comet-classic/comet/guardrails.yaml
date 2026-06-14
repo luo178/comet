@@ -11,4 +11,3 @@ allowedTools: []
 maxIterations: 500
 maxRetriesPerAction: 3
 confirmationRequiredFor: []
-
