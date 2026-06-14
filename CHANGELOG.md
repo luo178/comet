@@ -13,9 +13,16 @@ All notable changes to @rpamis/comet will be documented in this file.
 - **`.comet.yaml` run projection**: Accepts new Skill, Orchestration, and Run reference fields while preserving all 0.3.8 fields and behavior. The new fields are progressive and optional (never required), so existing changes remain valid; the shell validator, doctor schema check, and TypeScript state reader agree on the same field set.
 - **Test timeout ceiling**: Raised the vitest global `testTimeout` to 30s so the bash-spawn-heavy `comet-scripts` integration tests no longer time out at the 5s default on Windows under load.
 
+### Fixed
+
+- **Immutable Skill snapshots**: Skill hashes now include `SKILL.md` and declared script Tool bytes, snapshots copy every executable script into a content-addressed directory, and publication is atomic so a running Run cannot be silently changed by later Skill edits.
+- **Fail-closed Run recovery**: Run state writes now ignore only missing state files, malformed or incomplete Run projections are rejected with actionable errors, and corrupt deterministic steps can no longer be mistaken for successful completion.
+- **Complete recovery files**: Context, Checkpoint, and Trajectory data can be read through the Run Store, malformed Trajectory lines report their exact location, completed actions can clear stale pending files, and script Tool resolution rejects missing files, directories, and package-escaping symlinks.
+- **Adaptive lifecycle guards**: Adaptive candidates can only be accepted while the Run is active and has no pending action, preventing completed Runs from restarting or existing actions from being overwritten.
+
 ### Tests
 
-- **Foundation contract coverage**: Adds tests for Skill loading and validation, path-containment safety, order-independent hashing and snapshots, preserving/atomic Run state read-write, run-file persistence and checkpointing, action authorization and budgets, runtime evals, the deterministic/adaptive loop, and an end-to-end recovery slice.
+- **Foundation contract coverage**: Adds tests for Skill loading and validation, real-path containment, content-addressed immutable snapshots, preserving/atomic Run state read-write, fail-closed state validation, complete run-file recovery, action authorization and budgets, runtime evals, deterministic/adaptive lifecycle guards, and an end-to-end recovery slice through persisted Artifacts and Trajectory.
 
 ## What's Changed [0.3.8] - 2026-06-13
 
