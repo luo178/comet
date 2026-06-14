@@ -1,8 +1,7 @@
 import path from 'path';
 import { fileExists, readDir } from '../utils/file-system.js';
 import { promises as fs } from 'fs';
-
-type CometState = Record<string, string>;
+import { ensureStrictClassicRuntimeRun } from '../compat/classic-runtime-run.js';
 
 interface ChangeStatus {
   name: string;
@@ -17,6 +16,8 @@ interface ChangeStatus {
   tasksCompleted: number;
   tasksTotal: number;
   nextCommand: string | null;
+  currentStep: string | null;
+  error?: string;
 }
 
 function getNextCommand(phase: string): string | null {
@@ -45,19 +46,6 @@ async function countTasks(tasksPath: string): Promise<{ done: number; total: num
   return { done, total };
 }
 
-async function readCometState(changesDir: string, changeName: string): Promise<CometState | null> {
-  const yamlPath = path.join(changesDir, changeName, '.comet.yaml');
-  if (!(await fileExists(yamlPath))) return null;
-  const raw = await fs.readFile(yamlPath, 'utf-8');
-  const state: CometState = {};
-  for (const line of raw.split('\n')) {
-    const stripped = line.replace(/\s+#.*$/, '');
-    const match = stripped.match(/^(\w[\w_]*):\s*(.*)/);
-    if (match) state[match[1]] = match[2].trim();
-  }
-  return state;
-}
-
 async function getActiveChanges(projectPath: string): Promise<ChangeStatus[]> {
   const changesDir = path.join(projectPath, 'openspec', 'changes');
   if (!(await fileExists(changesDir))) return [];
@@ -66,30 +54,50 @@ async function getActiveChanges(projectPath: string): Promise<ChangeStatus[]> {
   const changes: ChangeStatus[] = [];
 
   for (const entry of entries) {
+    if (entry === 'archive') continue;
     const changeDir = path.join(changesDir, entry);
     const stat = await fs.stat(changeDir);
     if (!stat.isDirectory()) continue;
 
-    const state = await readCometState(changesDir, entry);
-    if (!state) continue;
-    if (state.archived === 'true') continue;
-
-    const { done, total } = await countTasks(path.join(changeDir, 'tasks.md'));
-
-    changes.push({
-      name: entry,
-      workflow: state.workflow ?? 'full',
-      phase: state.phase ?? 'unknown',
-      buildMode: state.build_mode ?? 'null',
-      isolation: state.isolation ?? 'null',
-      verifyMode: state.verify_mode ?? 'null',
-      verifyResult: state.verify_result ?? 'pending',
-      designDoc: state.design_doc === 'null' ? null : (state.design_doc ?? null),
-      plan: state.plan === 'null' ? null : (state.plan ?? null),
-      tasksCompleted: done,
-      tasksTotal: total,
-      nextCommand: getNextCommand(state.phase ?? 'unknown'),
-    });
+    const yamlPath = path.join(changeDir, '.comet.yaml');
+    if (!(await fileExists(yamlPath))) continue;
+    try {
+      const runtime = await ensureStrictClassicRuntimeRun(changeDir);
+      if (runtime.classic.archived) continue;
+      const { done, total } = await countTasks(path.join(changeDir, 'tasks.md'));
+      changes.push({
+        name: entry,
+        workflow: runtime.classic.workflow,
+        phase: runtime.classic.phase,
+        buildMode: runtime.classic.buildMode ?? 'null',
+        isolation: runtime.classic.isolation ?? 'null',
+        verifyMode: runtime.classic.verifyMode ?? 'null',
+        verifyResult: runtime.classic.verifyResult,
+        designDoc: runtime.classic.designDoc,
+        plan: runtime.classic.plan,
+        tasksCompleted: done,
+        tasksTotal: total,
+        nextCommand: getNextCommand(runtime.classic.phase),
+        currentStep: runtime.run.currentStep,
+      });
+    } catch (error) {
+      changes.push({
+        name: entry,
+        workflow: 'unknown',
+        phase: 'invalid',
+        buildMode: 'null',
+        isolation: 'null',
+        verifyMode: 'null',
+        verifyResult: 'pending',
+        designDoc: null,
+        plan: null,
+        tasksCompleted: 0,
+        tasksTotal: 0,
+        nextCommand: null,
+        currentStep: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   return changes;
@@ -107,7 +115,13 @@ function displayStatus(changes: ChangeStatus[]): void {
     const c = changes[i];
     const taskStr = c.tasksTotal > 0 ? ` [${c.tasksCompleted}/${c.tasksTotal} tasks]` : '';
     console.log(`  ${i + 1}. ${c.name} [phase: ${c.phase}${taskStr}]`);
+    if (c.error) {
+      console.log(`     error: ${c.error}`);
+      console.log();
+      continue;
+    }
     console.log(`     workflow: ${c.workflow} | build_mode: ${c.buildMode}`);
+    if (c.currentStep) console.log(`     run_step: ${c.currentStep}`);
     if (c.designDoc) console.log(`     design: ${c.designDoc}`);
     if (c.plan) console.log(`     plan:   ${c.plan}`);
     if (c.phase === 'verify') console.log(`     verify_result: ${c.verifyResult}`);

@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 
 const scriptsDir = path.resolve('assets', 'skills', 'comet', 'scripts');
+const classicSkillRoot = path.resolve('assets', 'skills', 'comet-classic');
 
 function findUsableBash(): string | null {
   const candidates = [
@@ -58,7 +59,7 @@ function runBash(
   return spawnSync(bashCommand, [toBashPath(script), ...args], {
     cwd,
     encoding: 'utf-8',
-    env: { ...process.env, ...env },
+    env: { ...process.env, COMET_CLASSIC_SKILL_ROOT: classicSkillRoot, ...env },
     timeout,
   });
 }
@@ -76,7 +77,7 @@ function runHookGuard(cwd: string, script: string, stdin: string, env: NodeJS.Pr
     cwd,
     encoding: 'utf-8',
     input: stdin,
-    env: { ...process.env, ...env },
+    env: { ...process.env, COMET_CLASSIC_SKILL_ROOT: classicSkillRoot, ...env },
   });
 }
 
@@ -143,7 +144,7 @@ async function createFakeOpenSpecArchive(tmpDir: string, archiveDateScript = 'da
 const describeShell = bashCommand ? describe : describe.skip;
 
 describe('comet shell script contracts', () => {
-  it('keeps state, validation, guard, handoff, and archive scripts as runtime-only facades', async () => {
+  it('keeps all Classic scripts as runtime-only facades', async () => {
     const envSource = await fs.readFile(path.join(scriptsDir, 'comet-env.sh'), 'utf-8');
     const sources: Record<string, string> = {
       state: await fs.readFile(path.join(scriptsDir, 'comet-state.sh'), 'utf-8'),
@@ -151,6 +152,7 @@ describe('comet shell script contracts', () => {
       guard: await fs.readFile(path.join(scriptsDir, 'comet-guard.sh'), 'utf-8'),
       handoff: await fs.readFile(path.join(scriptsDir, 'comet-handoff.sh'), 'utf-8'),
       archive: await fs.readFile(path.join(scriptsDir, 'comet-archive.sh'), 'utf-8'),
+      'hook-guard': await fs.readFile(path.join(scriptsDir, 'comet-hook-guard.sh'), 'utf-8'),
     };
 
     for (const [command, source] of Object.entries(sources)) {
@@ -2112,7 +2114,6 @@ describeShell('comet shell scripts', () => {
       expect(content).not.toMatch(/\bsed\s+-i(?:\s|$)/);
     }
   });
-
 
   it('guards bash uname detection when bash cannot be spawned', async () => {
     const files = [

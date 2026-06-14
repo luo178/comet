@@ -24,6 +24,7 @@ async function classicSkillRoot(): Promise<string> {
   const candidates = [
     process.env.COMET_CLASSIC_SKILL_ROOT,
     path.resolve(runtimeDirectory, '..', '..', 'comet-classic'),
+    path.resolve(runtimeDirectory, '..', '..', 'assets', 'skills', 'comet-classic'),
     path.resolve('assets', 'skills', 'comet-classic'),
   ].filter((candidate): candidate is string => Boolean(candidate));
 
@@ -37,6 +38,16 @@ export async function ensureClassicRuntimeRun(changeDir: string): Promise<Classi
   return ensureClassicRun(changeDir, {
     skillPackage: await loadSkillPackage(await classicSkillRoot()),
   });
+}
+
+export async function ensureStrictClassicRuntimeRun(changeDir: string): Promise<ClassicRunContext> {
+  const projection = await readClassicState(changeDir);
+  if (projection.unknownKeys.length > 0) {
+    throw new Error(
+      `Invalid Classic state: unknown field(s): ${projection.unknownKeys.join(', ')}`,
+    );
+  }
+  return ensureClassicRuntimeRun(changeDir);
 }
 
 export async function transitionClassicRuntimeRun(

@@ -3,6 +3,7 @@ export * from './classic-evidence.js';
 export * from './classic-cli.js';
 export * from './classic-guard.js';
 export * from './classic-handoff.js';
+export * from './classic-hook-guard.js';
 export * from './classic-runtime-run.js';
 export * from './classic-state-command.js';
 export * from './classic-validate-command.js';

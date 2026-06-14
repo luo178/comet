@@ -79,11 +79,16 @@ async function copyScripts(source: string, destination: string): Promise<void> {
   }
 }
 
-function runScript(cwd: string, scripts: string, name: string, args: string[]) {
+function runScript(cwd: string, scripts: string, name: string, args: string[], input?: string) {
   if (!bashCommand) throw new Error('Bash is required for differential contract execution');
   return spawnSync(bashCommand, [toBashPath(path.join(scripts, name)), ...args], {
     cwd,
     encoding: 'utf8',
+    input,
+    env: {
+      ...process.env,
+      COMET_CLASSIC_SKILL_ROOT: path.resolve('assets', 'skills', 'comet-classic'),
+    },
   });
 }
 
@@ -214,15 +219,41 @@ async function observeHandoff(
   await fs.writeFile(path.join(changeDir, 'tasks.md'), '- [x] seed task\n');
 
   const result = runScript(root, scripts, 'comet-handoff.sh', [name, 'design', '--write']);
-  const yaml = parse(
-    await fs.readFile(path.join(changeDir, '.comet.yaml'), 'utf8'),
-  ) as Record<string, unknown>;
+  const yaml = parse(await fs.readFile(path.join(changeDir, '.comet.yaml'), 'utf8')) as Record<
+    string,
+    unknown
+  >;
 
   return {
     status: result.status,
     stdout: normalizeOutput(result.stdout, root),
     stderr: normalizeOutput(result.stderr, root),
     yaml: legacyProjection(yaml),
+  };
+}
+
+async function observeHook(sourceScripts: string): Promise<GuardObservation> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comet-hook-'));
+  temporaryRoots.push(root);
+  const scripts = path.join(root, 'scripts');
+  await copyScripts(sourceScripts, scripts);
+
+  const name = 'full-hook';
+  runScript(root, scripts, 'comet-state.sh', ['init', name, 'full']);
+  runScript(root, scripts, 'comet-state.sh', ['transition', name, 'open-complete']);
+  const changeDir = path.join(root, 'openspec', 'changes', name);
+  await fs.writeFile(path.join(changeDir, 'proposal.md'), 'proposal\n');
+  await fs.writeFile(path.join(changeDir, 'design.md'), 'design\n');
+  await fs.writeFile(path.join(changeDir, 'tasks.md'), '- [ ] task\n');
+  const input = JSON.stringify({
+    tool_name: 'Write',
+    tool_input: { file_path: path.join(root, 'src', 'index.ts') },
+  });
+  const result = runScript(root, scripts, 'comet-hook-guard.sh', [], input);
+  return {
+    status: result.status,
+    stdout: normalizeOutput(result.stdout, root),
+    stderr: normalizeOutput(result.stderr, root),
   };
 }
 
@@ -283,5 +314,9 @@ describeBash('Classic 0.3.8 differential contract', () => {
     expect(await observeHandoff(activeScripts, 'full')).toEqual(
       await observeHandoff(referenceScripts, 'full'),
     );
+  });
+
+  it('preserves hook guard blocking for source writes in design', async () => {
+    expect(await observeHook(activeScripts)).toEqual(await observeHook(referenceScripts));
   });
 });

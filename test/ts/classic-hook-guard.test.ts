@@ -1,0 +1,102 @@
+import { spawnSync } from 'child_process';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
+
+const runtime = path.resolve('assets', 'skills', 'comet', 'scripts', 'comet-runtime.mjs');
+const temporary: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporary
+      .splice(0)
+      .map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })),
+  );
+});
+
+async function makeProject(): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'classic-hook-'));
+  temporary.push(dir);
+  return dir;
+}
+
+function run(cwd: string, command: string, args: string[] = [], input?: string) {
+  return spawnSync(process.execPath, [runtime, command, ...args], {
+    cwd,
+    encoding: 'utf8',
+    input,
+  });
+}
+
+function hookInput(filePath: string): string {
+  return JSON.stringify({
+    tool_name: 'Write',
+    tool_input: { file_path: filePath, content: '// test' },
+  });
+}
+
+async function seedDesignChange(dir: string): Promise<string> {
+  run(dir, 'state', ['init', 'demo', 'full']);
+  run(dir, 'state', ['transition', 'demo', 'open-complete']);
+  const changeDir = path.join(dir, 'openspec', 'changes', 'demo');
+  await fs.writeFile(path.join(changeDir, 'proposal.md'), 'proposal\n');
+  await fs.writeFile(path.join(changeDir, 'design.md'), 'design\n');
+  await fs.writeFile(path.join(changeDir, 'tasks.md'), '- [ ] task\n');
+  return changeDir;
+}
+
+describe('Classic hook guard command', () => {
+  it('allows writes when no active change exists', async () => {
+    const dir = await makeProject();
+
+    const result = run(dir, 'hook-guard', [], hookInput(path.join(dir, 'src', 'free.ts')));
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('allowed: no active comet change');
+  });
+
+  it('blocks source writes in design and silently migrates the active change', async () => {
+    const dir = await makeProject();
+    const changeDir = await seedDesignChange(dir);
+
+    const result = run(dir, 'hook-guard', [], hookInput(path.join(dir, 'src', 'index.ts')));
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('COMET PHASE GUARD');
+    expect(result.stderr).toContain('当前阶段: design');
+    const state = parse(await fs.readFile(path.join(changeDir, '.comet.yaml'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(state).toMatchObject({
+      classic_migration: 1,
+      skill: 'comet-classic',
+      current_step: 'full.design.handoff',
+    });
+  });
+
+  it('allows OpenSpec artifact writes in design', async () => {
+    const dir = await makeProject();
+    const changeDir = await seedDesignChange(dir);
+
+    const result = run(dir, 'hook-guard', [], hookInput(path.join(changeDir, 'proposal.md')));
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('phase: design, handoff/spec');
+  });
+
+  it('reports invalid state without modifying it', async () => {
+    const dir = await makeProject();
+    const changeDir = await seedDesignChange(dir);
+    await fs.appendFile(path.join(changeDir, '.comet.yaml'), 'unknown_root_field: true\n');
+    const before = await fs.readFile(path.join(changeDir, '.comet.yaml'), 'utf8');
+
+    const result = run(dir, 'hook-guard', [], hookInput(path.join(dir, 'src', 'index.ts')));
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('unknown_root_field');
+    expect(await fs.readFile(path.join(changeDir, '.comet.yaml'), 'utf8')).toBe(before);
+  });
+});

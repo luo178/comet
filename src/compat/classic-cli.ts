@@ -2,6 +2,7 @@ import { pathToFileURL } from 'url';
 import { classicArchiveCommand } from './classic-archive.js';
 import { classicGuardCommand } from './classic-guard.js';
 import { classicHandoffCommand } from './classic-handoff.js';
+import { classicHookGuardCommand } from './classic-hook-guard.js';
 import { classicStateCommand } from './classic-state-command.js';
 import { classicValidateCommand } from './classic-validate-command.js';
 
@@ -39,6 +40,7 @@ const DEFAULT_HANDLERS: ClassicCommandHandlers = {
   guard: classicGuardCommand,
   handoff: classicHandoffCommand,
   archive: classicArchiveCommand,
+  'hook-guard': classicHookGuardCommand,
 };
 
 function isClassicCommand(value: string): value is ClassicCommandName {

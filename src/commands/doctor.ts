@@ -1,12 +1,12 @@
 import path from 'path';
 import os from 'os';
 import { execSync } from 'child_process';
-import { promises as fs } from 'fs';
 import { fileExists, readDir } from '../utils/file-system.js';
 import { isCommandAvailable } from '../core/openspec.js';
 import { readManifest, getAssetsDir, getManagedSkillPaths } from '../core/skills.js';
 import { PLATFORMS, getPlatformSkillsDirs } from '../core/platforms.js';
 import type { InstallScope } from '../core/types.js';
+import { ensureStrictClassicRuntimeRun } from '../compat/classic-runtime-run.js';
 
 interface CheckResult {
   check: string;
@@ -15,54 +15,6 @@ interface CheckResult {
 }
 
 type DoctorScope = InstallScope | 'auto';
-
-const VALID_YAML_FIELDS = new Set([
-  'workflow',
-  'phase',
-  'build_mode',
-  'isolation',
-  'verify_mode',
-  'verify_result',
-  'design_doc',
-  'plan',
-  'verification_report',
-  'branch_status',
-  'archived',
-  'verified_at',
-  'run_id',
-  'skill',
-  'skill_version',
-  'skill_hash',
-  'orchestration',
-  'current_step',
-  'iteration',
-  'pending',
-  'pending_ref',
-  'trajectory_ref',
-  'context_ref',
-  'artifacts_ref',
-  'checkpoint_ref',
-  'run_status',
-  'run_retries',
-]);
-
-function collectTopLevelYamlKeys(yamlContent: string): string[] {
-  const topLevelKeys: string[] = [];
-
-  for (const line of yamlContent.split(/\r?\n/u)) {
-    const trimmedLine = line.trim();
-    if (!trimmedLine || trimmedLine.startsWith('#')) continue;
-    if (/^\s/u.test(line)) continue;
-    if (trimmedLine.startsWith('- ')) continue;
-
-    const keyMatch = line.match(/^['"]?([A-Za-z0-9_-]+)['"]?\s*:/u);
-    if (keyMatch) {
-      topLevelKeys.push(keyMatch[1]);
-    }
-  }
-
-  return topLevelKeys;
-}
 
 async function checkOpenSpecCli(): Promise<CheckResult> {
   if (!isCommandAvailable('openspec')) {
@@ -211,21 +163,25 @@ async function checkCometYamlValidity(projectPath: string): Promise<CheckResult[
   const results: CheckResult[] = [];
 
   for (const entry of entries) {
-    const yamlPath = path.join(changesDir, entry, '.comet.yaml');
+    if (entry === 'archive') continue;
+    const changeDir = path.join(changesDir, entry);
+    const yamlPath = path.join(changeDir, '.comet.yaml');
     if (!(await fileExists(yamlPath))) continue;
 
-    const raw = await fs.readFile(yamlPath, 'utf-8');
-    const unknownFields = collectTopLevelYamlKeys(raw).filter((key) => !VALID_YAML_FIELDS.has(key));
-
-    results.push(
-      unknownFields.length === 0
-        ? { check: `.comet.yaml: ${entry}`, status: 'pass' as const, message: 'valid' }
-        : {
-            check: `.comet.yaml: ${entry}`,
-            status: 'fail' as const,
-            message: `unknown field(s): ${unknownFields.join(', ')}`,
-          },
-    );
+    try {
+      const runtime = await ensureStrictClassicRuntimeRun(changeDir);
+      results.push({
+        check: `.comet.yaml: ${entry}`,
+        status: 'pass',
+        message: `valid (step: ${runtime.run.currentStep ?? 'completed'})`,
+      });
+    } catch (error) {
+      results.push({
+        check: `.comet.yaml: ${entry}`,
+        status: 'fail',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   return results;

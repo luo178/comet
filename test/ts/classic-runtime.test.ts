@@ -56,18 +56,12 @@ describe('Classic runtime CLI adapter', () => {
     });
   });
 
-  it('distinguishes unknown commands from recognized commands awaiting handlers', async () => {
+  it('rejects unknown commands after all recognized handlers are registered', async () => {
     const { runClassicCli } = await import('../../src/compat/classic-cli.js');
 
     await expect(runClassicCli(['unknown'])).resolves.toMatchObject({
       exitCode: 64,
       stderr: expect.stringContaining('Unknown Classic command'),
-    });
-    // state/validate/guard/handoff/archive are implemented; hook-guard still
-    // awaits a handler (Task 13), so it returns the "not implemented" code.
-    await expect(runClassicCli(['hook-guard'])).resolves.toMatchObject({
-      exitCode: 70,
-      stderr: expect.stringContaining('not implemented'),
     });
   });
 });
