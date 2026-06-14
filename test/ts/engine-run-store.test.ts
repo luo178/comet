@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import {
   appendTrajectory,
+  clearPendingAction,
   readArtifacts,
   readCheckpoint,
   readContext,
@@ -60,6 +61,8 @@ describe('run store', () => {
       report: 'report.md',
     });
     expect(await readPendingAction(changeDir, '.comet/pending-action.json')).toEqual(action);
+    await clearPendingAction(changeDir, '.comet/pending-action.json');
+    expect(await readPendingAction(changeDir, '.comet/pending-action.json')).toBeNull();
     expect(await readContext(changeDir, '.comet/context.md')).toBe('# Context\n');
     expect(await readCheckpoint(changeDir, '.comet/checkpoint.json')).toEqual(checkpoint);
     expect(await readTrajectory(changeDir, '.comet/trajectory.jsonl')).toEqual([event]);

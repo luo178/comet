@@ -117,6 +117,14 @@ export async function readPendingAction(
   }
 }
 
+export async function clearPendingAction(changeDir: string, relativePath: string): Promise<void> {
+  try {
+    await fs.unlink(resolveRunPath(changeDir, relativePath));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+}
+
 export async function writeCheckpoint(
   changeDir: string,
   relativePath: string,

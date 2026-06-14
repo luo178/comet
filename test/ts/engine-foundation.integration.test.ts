@@ -9,7 +9,11 @@ import { decide, recordOutcome, startRun } from '../../src/engine/loop.js';
 import { readRunState, writeRunState } from '../../src/engine/state.js';
 import {
   appendTrajectory,
+  clearPendingAction,
+  readArtifacts,
   readPendingAction,
+  readTrajectory,
+  writeArtifacts,
   writePendingAction,
 } from '../../src/engine/run-store.js';
 import type { RuntimeAdapter } from '../../src/runtime/types.js';
@@ -92,10 +96,23 @@ describe('Skill Engine Foundation integration', () => {
     };
     const outcome = await adapter.execute(pending!, { changeDir, state: resumed! });
     state = recordOutcome(pkg, resumed!, outcome);
+    await writeArtifacts(changeDir, state.artifactsRef, outcome.artifacts ?? {});
+    await clearPendingAction(changeDir, state.pendingRef);
+    await appendTrajectory(changeDir, state.trajectoryRef, {
+      sequence: 2,
+      timestamp: '2026-06-13T00:00:01.000Z',
+      type: 'action_completed',
+      runId: state.runId,
+      data: { actionId: outcome.actionId, status: outcome.status },
+    });
     await writeRunState(changeDir, state);
 
-    expect(state.iteration).toBe(1);
-    expect(state.status).toBe('completed');
+    expect(await readRunState(changeDir)).toEqual(state);
+    expect(await readArtifacts(changeDir, state.artifactsRef)).toEqual({
+      plan: 'docs/plan.md',
+    });
+    expect(await readPendingAction(changeDir, state.pendingRef)).toBeNull();
+    expect(await readTrajectory(changeDir, state.trajectoryRef)).toHaveLength(2);
     const raw = await fs.readFile(path.join(changeDir, '.comet.yaml'), 'utf8');
     expect(raw).toContain('workflow: full');
     expect(raw).toContain('phase: build');

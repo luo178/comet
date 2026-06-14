@@ -51,8 +51,17 @@ export function decide(
   if (state.orchestration === 'adaptive') {
     return { state, action: null, reason: 'Adaptive orchestration requires an Agent candidate' };
   }
+  if (state.currentStep === null) {
+    return { state: { ...state, status: 'completed' }, action: null };
+  }
   const step = stepFor(pkg, state.currentStep);
-  if (!step) return { state: { ...state, status: 'completed' }, action: null };
+  if (!step) {
+    return {
+      state: { ...state, status: 'failed' },
+      action: null,
+      reason: `Unknown current step: ${state.currentStep}`,
+    };
+  }
   const action: EngineAction = {
     ...step.action,
     id: actionId(state.runId, state.iteration, step.id),
@@ -81,6 +90,12 @@ export function acceptAdaptiveAction(
   if (state.orchestration !== 'adaptive') {
     return { state, action: null, reason: 'Run is not adaptive' };
   }
+  if (state.status !== 'running') {
+    return { state, action: null, reason: `Run is ${state.status}` };
+  }
+  if (state.pending) {
+    return { state, action: null, reason: `Action already pending: ${state.pending}` };
+  }
   return acceptAction(pkg, state, action, confirmations);
 }
 
@@ -92,6 +107,10 @@ export function recordOutcome(
   if (!state.pending || state.pending !== outcome.actionId) {
     throw new Error(`Outcome does not match pending action: ${outcome.actionId}`);
   }
+  const step = stepFor(pkg, state.currentStep);
+  if (state.orchestration === 'deterministic' && !step) {
+    throw new Error(`Unknown current step: ${state.currentStep ?? '(missing)'}`);
+  }
   if (outcome.status === 'failed') {
     const retries = {
       ...state.retries,
@@ -99,7 +118,6 @@ export function recordOutcome(
     };
     return { ...state, pending: null, status: 'running', retries };
   }
-  const step = stepFor(pkg, state.currentStep);
   const next = state.orchestration === 'deterministic' ? (step?.next ?? null) : state.currentStep;
   return {
     ...state,
