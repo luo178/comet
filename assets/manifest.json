@@ -25,6 +25,7 @@
     "comet-hotfix/SKILL.md",
     "comet-tweak/SKILL.md"
   ],
+  "internalSkills": [],
   "rules": [
     "comet/rules/comet-phase-guard.md"
   ],

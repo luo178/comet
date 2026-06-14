@@ -23,10 +23,19 @@ type HookConfig = {
 type Manifest = {
   version: string;
   skills: string[];
+  internalSkills?: string[];
   rules?: string[];
   hooks?: Record<string, HookConfig>;
   languages?: LanguageConfig[];
 };
+
+function getManagedSkillPaths(manifest: Manifest): string[] {
+  return [...new Set([...manifest.skills, ...(manifest.internalSkills ?? [])])];
+}
+
+function getUserFacingSkillNames(manifest: Manifest): string[] {
+  return getTopLevelSkillNames(manifest.skills);
+}
 
 const OPENCODE_COMMAND_HEADER = `---
 description: Run the {skillName} Comet workflow
@@ -60,7 +69,7 @@ async function copyCometSkillsForPlatform(
   let copied = 0;
   let skippedCount = 0;
 
-  for (const skillRelPath of manifest.skills) {
+  for (const skillRelPath of getManagedSkillPaths(manifest)) {
     const isScript = skillRelPath.includes('/scripts/');
     const sourceDir = isScript ? 'skills' : languageSkillsDir;
 
@@ -255,7 +264,7 @@ async function readManifest(): Promise<Manifest> {
 
 async function getManifestSkills(): Promise<string[]> {
   const manifest = await readManifest();
-  return manifest.skills;
+  return getManagedSkillPaths(manifest);
 }
 
 /**
@@ -756,7 +765,9 @@ export {
   copyCometRulesForPlatform,
   installCometHooksForPlatform,
   readManifest,
+  getManagedSkillPaths,
   getManifestSkills,
+  getUserFacingSkillNames,
   createWorkingDirs,
   getAssetsDir,
   computeRuleDestPath,

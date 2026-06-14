@@ -3,7 +3,12 @@ import { readFile, writeFile } from 'fs/promises';
 
 import { fileExists, readDir, removeFile, removeDir, isDirEmpty } from '../utils/file-system.js';
 import { getPlatformSkillsDir, type Platform } from './platforms.js';
-import { readManifest, computeRuleDestPath, isManagedHookCommand } from './skills.js';
+import {
+  readManifest,
+  getManagedSkillPaths,
+  computeRuleDestPath,
+  isManagedHookCommand,
+} from './skills.js';
 import type { InstallScope } from './types.js';
 
 interface RemovalResult {
@@ -21,6 +26,7 @@ async function removeCometSkillsForPlatform(
   scope: InstallScope = 'project',
 ): Promise<RemovalResult> {
   const manifest = await readManifest();
+  const managedSkills = getManagedSkillPaths(manifest);
   const skillsDir = getPlatformSkillsDir(platform, scope);
   const skillsDirs = [skillsDir];
   if (scope === 'global' && platform.id === 'pi') {
@@ -31,7 +37,7 @@ async function removeCometSkillsForPlatform(
   const failed = 0;
 
   for (const targetSkillsDir of uniqueSkillsDirs) {
-    for (const skillRelPath of manifest.skills) {
+    for (const skillRelPath of managedSkills) {
       const dest = path.join(baseDir, targetSkillsDir, 'skills', skillRelPath);
       const result = await removeFile(dest);
       if (result) {
@@ -70,7 +76,7 @@ async function removeCometSkillsForPlatform(
   // Collect all unique parent directories of removed files (bottom-up cleanup)
   const parentDirs = new Set<string>();
   for (const targetSkillsDir of uniqueSkillsDirs) {
-    for (const skillRelPath of manifest.skills) {
+    for (const skillRelPath of managedSkills) {
       const parts = skillRelPath.split('/');
       if (parts[0].startsWith('comet')) {
         // Add all intermediate directories for nested paths

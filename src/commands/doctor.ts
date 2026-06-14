@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import { fileExists, readDir } from '../utils/file-system.js';
 import { isCommandAvailable } from '../core/openspec.js';
-import { readManifest, getAssetsDir } from '../core/skills.js';
+import { readManifest, getAssetsDir, getManagedSkillPaths } from '../core/skills.js';
 import { PLATFORMS, getPlatformSkillsDirs } from '../core/platforms.js';
 import type { InstallScope } from '../core/types.js';
 
@@ -129,6 +129,7 @@ async function checkSkillCompleteness(
 ): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const manifest = await readManifest();
+  const managedSkills = getManagedSkillPaths(manifest);
 
   let anyPlatform = false;
   for (const base of getScopeBases(projectPath, scope)) {
@@ -148,7 +149,7 @@ async function checkSkillCompleteness(
       anyPlatform = true;
 
       const missing: string[] = [];
-      for (const relPath of manifest.skills) {
+      for (const relPath of managedSkills) {
         const fullPath = path.join(base.baseDir, detectedSkillsDir, 'skills', relPath);
         if (!(await fileExists(fullPath))) {
           missing.push(relPath);
@@ -160,7 +161,7 @@ async function checkSkillCompleteness(
           ? {
               check: `skills: ${platform.name} (${base.scope})`,
               status: 'pass' as const,
-              message: `complete (${manifest.skills.length} files)`,
+              message: `complete (${managedSkills.length} files)`,
             }
           : {
               check: `skills: ${platform.name} (${base.scope})`,
