@@ -40,6 +40,7 @@
     "test:shell": "node scripts/run-bats.js test/shell/*.bats",
     "benchmark:context": "node scripts/context-compression-benchmark.mjs",
     "benchmark:execution": "node scripts/context-execution-benchmark.mjs",
+    "benchmark:classic": "node scripts/classic-baseline-benchmark.mjs",
     "prepare": "husky && pnpm run build",
     "prepublishOnly": "node scripts/prepublish-check.js && pnpm run build",
     "postinstall": "node scripts/postinstall.js"
