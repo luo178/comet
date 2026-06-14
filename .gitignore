@@ -88,3 +88,6 @@ docs/superpowers/
 .codegraph/
 
 .comet/
+
+# Local Git worktrees
+.worktrees/
