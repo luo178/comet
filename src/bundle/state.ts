@@ -41,12 +41,12 @@ function invalidatedState(
   state: BundleAuthoringState,
   currentHash: string | null,
 ): BundleAuthoringState {
-  const { eval: _eval, review: _review, ready: _ready, conflict: _conflict, ...preserved } = state;
-  return {
-    ...preserved,
-    status: 'draft',
-    currentHash,
-  };
+  const invalidated = { ...state, status: 'draft' as const, currentHash };
+  delete invalidated.eval;
+  delete invalidated.review;
+  delete invalidated.ready;
+  delete invalidated.conflict;
+  return invalidated;
 }
 
 export async function readBundleAuthoringState(
