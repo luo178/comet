@@ -1,3 +1,5 @@
+import type { BundleCandidateSource } from './candidates.js';
+
 export type BundleSkillVisibility = 'entry' | 'internal';
 export type BundleCapability = 'skills' | 'rules' | 'hooks' | 'scripts' | 'references' | 'assets';
 export type BundleSideEffect = 'none' | 'read' | 'write' | 'external';
@@ -130,4 +132,35 @@ export interface PlatformInstallFile {
         failure: NormalizedHook['failure'];
         requiresConfirmation: boolean;
       };
+}
+
+export type BundleAuthoringStatus =
+  | 'draft'
+  | 'eval-passed'
+  | 'review-approved'
+  | 'ready'
+  | 'drift-conflict';
+
+export interface BundleAuthoringState {
+  schemaVersion: 1;
+  name: string;
+  mode: 'create' | 'optimize';
+  status: BundleAuthoringStatus;
+  draftPath: string;
+  currentHash: string | null;
+  base?: { root: string; version: string; hash: string };
+  candidates: BundleCandidateSource[];
+  creator: 'native' | 'comet-fallback' | null;
+  defaultLocale: string;
+  locales: string[];
+  engineEnabled: boolean;
+  eval?: { level: 'quick' | 'full'; hash: string; resultPath: string; passed: boolean };
+  review?: {
+    hash: string;
+    decision: 'approved' | 'rejected';
+    reviewer: string;
+    at: string;
+  };
+  ready?: { hash: string; path: string; publishedAt: string };
+  conflict?: { draftHash: string; readyHash: string };
 }

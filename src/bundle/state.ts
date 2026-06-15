@@ -1,0 +1,119 @@
+import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { hashBundle } from './hash.js';
+import { loadBundle } from './load.js';
+import type { BundleAuthoringState } from './types.js';
+
+function validateName(name: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(name)) {
+    throw new Error(`Invalid Bundle name: ${name}`);
+  }
+}
+
+function statePath(projectRoot: string, name: string): string {
+  validateName(name);
+  return path.resolve(projectRoot, '.comet', 'bundle-authoring', `${name}.json`);
+}
+
+function assertState(value: unknown, file: string): asserts value is BundleAuthoringState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Invalid Bundle authoring state at ${file}: document must be an object`);
+  }
+  const state = value as Partial<BundleAuthoringState>;
+  if (state.schemaVersion !== 1 || typeof state.name !== 'string') {
+    throw new Error(`Invalid Bundle authoring state at ${file}: unsupported schema`);
+  }
+  if (typeof state.draftPath !== 'string' || !Array.isArray(state.candidates)) {
+    throw new Error(`Invalid Bundle authoring state at ${file}: required fields are missing`);
+  }
+}
+
+async function currentBundleHash(root: string): Promise<string | null> {
+  try {
+    return await hashBundle(await loadBundle(root));
+  } catch {
+    return null;
+  }
+}
+
+function invalidatedState(
+  state: BundleAuthoringState,
+  currentHash: string | null,
+): BundleAuthoringState {
+  const { eval: _eval, review: _review, ready: _ready, conflict: _conflict, ...preserved } = state;
+  return {
+    ...preserved,
+    status: 'draft',
+    currentHash,
+  };
+}
+
+export async function readBundleAuthoringState(
+  projectRoot: string,
+  name: string,
+): Promise<BundleAuthoringState> {
+  const file = statePath(projectRoot, name);
+  const value = JSON.parse(await fs.readFile(file, 'utf8')) as unknown;
+  assertState(value, file);
+  if (value.name !== name) {
+    throw new Error(`Invalid Bundle authoring state at ${file}: name must be ${name}`);
+  }
+  return value;
+}
+
+export async function writeBundleAuthoringState(
+  projectRoot: string,
+  state: BundleAuthoringState,
+): Promise<void> {
+  const file = statePath(projectRoot, state.name);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const temporary = path.join(path.dirname(file), `.${state.name}.${randomUUID()}.tmp`);
+  try {
+    await fs.writeFile(temporary, JSON.stringify(state, null, 2) + '\n', {
+      encoding: 'utf8',
+      flag: 'wx',
+    });
+    await fs.rename(temporary, file);
+  } finally {
+    await fs.rm(temporary, { force: true });
+  }
+}
+
+export async function reconcileBundleAuthoringState(
+  projectRoot: string,
+  name: string,
+): Promise<BundleAuthoringState> {
+  const state = await readBundleAuthoringState(projectRoot, name);
+  const draftHash = await currentBundleHash(state.draftPath);
+
+  if (state.ready) {
+    const readyHash = await currentBundleHash(state.ready.path);
+    const draftChanged = draftHash !== state.ready.hash;
+    const readyChanged = readyHash !== state.ready.hash;
+    if (draftChanged && readyChanged) {
+      const conflicted: BundleAuthoringState = {
+        ...state,
+        status: 'drift-conflict',
+        currentHash: draftHash,
+        conflict: {
+          draftHash: draftHash ?? 'invalid',
+          readyHash: readyHash ?? 'invalid',
+        },
+      };
+      await writeBundleAuthoringState(projectRoot, conflicted);
+      return conflicted;
+    }
+    if (draftChanged || readyChanged) {
+      const invalidated = invalidatedState(state, draftHash);
+      await writeBundleAuthoringState(projectRoot, invalidated);
+      return invalidated;
+    }
+  } else if (draftHash !== state.currentHash) {
+    const invalidated = invalidatedState(state, draftHash);
+    await writeBundleAuthoringState(projectRoot, invalidated);
+    return invalidated;
+  }
+
+  return state;
+}
