@@ -1,6 +1,6 @@
 # Comet Skill Engine Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 建立不改变 Comet 0.3.8 用户行为的 Skill Engine 基础层，包括 Skill Package、Run 持久化、统一循环、Guardrails、Runtime Evals 和 Runtime Adapter 契约。
 
@@ -104,7 +104,7 @@ run_retries: "{}"
 - Create: `src/engine/types.ts`
 - Create: `src/runtime/types.ts`
 
-- [ ] **Step 1: 安装 YAML 解析器**
+- [x] **Step 1: 安装 YAML 解析器**
 
 Run:
 
@@ -114,7 +114,7 @@ pnpm add yaml
 
 Expected: `package.json` 的 dependencies 新增 `yaml`，lockfile 更新。
 
-- [ ] **Step 2: 写 Skill 领域类型**
+- [x] **Step 2: 写 Skill 领域类型**
 
 Create `src/skill/types.ts`:
 
@@ -213,7 +213,7 @@ export interface SkillPackage {
 }
 ```
 
-- [ ] **Step 3: 写 Engine 与 Runtime 契约类型**
+- [x] **Step 3: 写 Engine 与 Runtime 契约类型**
 
 Create `src/engine/types.ts`:
 
@@ -294,7 +294,7 @@ export interface RuntimeAdapter {
 }
 ```
 
-- [ ] **Step 4: 编译确认类型成立**
+- [x] **Step 4: 编译确认类型成立**
 
 Run:
 
@@ -304,7 +304,7 @@ pnpm exec tsc --noEmit
 
 Expected: exit 0。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add package.json pnpm-lock.yaml src/skill/types.ts src/engine/types.ts src/runtime/types.ts
@@ -317,7 +317,7 @@ git commit -m "feat(engine): add Skill Engine domain contracts"
 - Create: `src/skill/load.ts`
 - Create: `test/ts/skill-load.test.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `test/ts/skill-load.test.ts`:
 
@@ -392,7 +392,7 @@ describe('loadSkillPackage', () => {
 });
 ```
 
-- [ ] **Step 2: 运行并确认失败**
+- [x] **Step 2: 运行并确认失败**
 
 Run:
 
@@ -402,7 +402,7 @@ pnpm exec vitest run test/ts/skill-load.test.ts
 
 Expected: FAIL，模块 `src/skill/load.ts` 不存在。
 
-- [ ] **Step 3: 实现加载器**
+- [x] **Step 3: 实现加载器**
 
 Create `src/skill/load.ts`:
 
@@ -465,7 +465,7 @@ export async function loadSkillPackage(root: string): Promise<SkillPackage> {
 }
 ```
 
-- [ ] **Step 4: 运行并确认通过**
+- [x] **Step 4: 运行并确认通过**
 
 Run:
 
@@ -475,7 +475,7 @@ pnpm exec vitest run test/ts/skill-load.test.ts
 
 Expected: PASS，2 tests。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/skill/load.ts test/ts/skill-load.test.ts
@@ -488,7 +488,7 @@ git commit -m "feat(engine): load Comet Skill packages"
 - Create: `src/skill/validate.ts`
 - Create: `test/ts/skill-validate.test.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `test/ts/skill-validate.test.ts`:
 
@@ -576,7 +576,7 @@ describe('validateSkillPackage', () => {
 });
 ```
 
-- [ ] **Step 2: 运行并确认失败**
+- [x] **Step 2: 运行并确认失败**
 
 Run:
 
@@ -586,7 +586,7 @@ pnpm exec vitest run test/ts/skill-validate.test.ts
 
 Expected: FAIL，`validateSkillPackage` 不存在。
 
-- [ ] **Step 3: 实现校验器**
+- [x] **Step 3: 实现校验器**
 
 Create `src/skill/validate.ts`:
 
@@ -669,7 +669,7 @@ export function validateSkillPackage(pkg: SkillPackage): string[] {
 }
 ```
 
-- [ ] **Step 4: 运行并确认通过**
+- [x] **Step 4: 运行并确认通过**
 
 Run:
 
@@ -679,7 +679,7 @@ pnpm exec vitest run test/ts/skill-validate.test.ts
 
 Expected: PASS，4 tests。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/skill/validate.ts test/ts/skill-validate.test.ts
@@ -692,7 +692,7 @@ git commit -m "feat(engine): validate Skill package boundaries"
 - Create: `src/skill/snapshot.ts`
 - Create: `test/ts/skill-snapshot.test.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `test/ts/skill-snapshot.test.ts`:
 
@@ -765,7 +765,7 @@ describe('Skill snapshots', () => {
 });
 ```
 
-- [ ] **Step 2: 运行并确认失败**
+- [x] **Step 2: 运行并确认失败**
 
 Run:
 
@@ -775,7 +775,7 @@ pnpm exec vitest run test/ts/skill-snapshot.test.ts
 
 Expected: FAIL，snapshot 模块不存在。
 
-- [ ] **Step 3: 实现规范化 hash 和快照**
+- [x] **Step 3: 实现规范化 hash 和快照**
 
 Create `src/skill/snapshot.ts`:
 
@@ -821,7 +821,7 @@ export async function createSkillSnapshot(
 }
 ```
 
-- [ ] **Step 4: 运行并确认通过**
+- [x] **Step 4: 运行并确认通过**
 
 Run:
 
@@ -831,7 +831,7 @@ pnpm exec vitest run test/ts/skill-snapshot.test.ts
 
 Expected: PASS，2 tests。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/skill/snapshot.ts test/ts/skill-snapshot.test.ts
@@ -850,7 +850,7 @@ git commit -m "feat(engine): snapshot and hash Skill packages"
 - Modify: `test/ts/doctor.test.ts`
 - Create: `test/ts/engine-schema-compat.test.ts`
 
-- [ ] **Step 1: 写 TS 状态读写失败测试**
+- [x] **Step 1: 写 TS 状态读写失败测试**
 
 Create `test/ts/engine-state.test.ts`:
 
@@ -904,7 +904,7 @@ describe('engine state projection', () => {
 });
 ```
 
-- [ ] **Step 2: 运行并确认失败**
+- [x] **Step 2: 运行并确认失败**
 
 Run:
 
@@ -914,7 +914,7 @@ pnpm exec vitest run test/ts/engine-state.test.ts
 
 Expected: FAIL，state 模块不存在。
 
-- [ ] **Step 3: 实现原子、保留式状态读写**
+- [x] **Step 3: 实现原子、保留式状态读写**
 
 Create `src/engine/state.ts`:
 
@@ -984,7 +984,7 @@ export async function writeRunState(changeDir: string, state: RunState): Promise
 }
 ```
 
-- [ ] **Step 4: 运行 TS 测试确认通过**
+- [x] **Step 4: 运行 TS 测试确认通过**
 
 Run:
 
@@ -994,7 +994,7 @@ pnpm exec vitest run test/ts/engine-state.test.ts
 
 Expected: PASS。
 
-- [ ] **Step 5: 同步 shell 和 doctor schema**
+- [x] **Step 5: 同步 shell 和 doctor schema**
 
 在 `comet-state.sh` 的 `cmd_set` 白名单加入：
 
@@ -1030,7 +1030,7 @@ pending_ref|trajectory_ref|context_ref|artifacts_ref|checkpoint_ref)
 `skill_hash`、`iteration` 和五个引用路径执行同等校验。新字段是渐进字段，不加入
 `REQUIRED_FIELDS`，保证 0.3.8 change 继续有效。
 
-- [ ] **Step 6: 增加 shell schema 兼容测试**
+- [x] **Step 6: 增加 shell schema 兼容测试**
 
 Create `test/ts/engine-schema-compat.test.ts`:
 
@@ -1142,7 +1142,7 @@ describe.skipIf(!bash())('Skill Engine shell schema compatibility', () => {
 在 `test/ts/doctor.test.ts` 的有效 YAML fixture 增加同一组字段，并断言 schema check
 仍为 pass。
 
-- [ ] **Step 7: 运行状态相关测试**
+- [x] **Step 7: 运行状态相关测试**
 
 Run:
 
@@ -1152,7 +1152,7 @@ npx vitest run test/ts/engine-state.test.ts test/ts/engine-schema-compat.test.ts
 
 Expected: PASS。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add src/engine/state.ts test/ts/engine-state.test.ts test/ts/engine-schema-compat.test.ts assets/skills/comet/scripts/comet-state.sh assets/skills/comet/scripts/comet-yaml-validate.sh src/commands/doctor.ts test/ts/comet-scripts.test.ts test/ts/doctor.test.ts
@@ -1165,7 +1165,7 @@ git commit -m "feat(engine): persist Run state in .comet.yaml"
 - Create: `src/engine/run-store.ts`
 - Create: `test/ts/engine-run-store.test.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `test/ts/engine-run-store.test.ts`:
 
@@ -1238,7 +1238,7 @@ describe('run store', () => {
 });
 ```
 
-- [ ] **Step 2: 运行并确认失败**
+- [x] **Step 2: 运行并确认失败**
 
 Run:
 
@@ -1248,7 +1248,7 @@ pnpm exec vitest run test/ts/engine-run-store.test.ts
 
 Expected: FAIL。
 
-- [ ] **Step 3: 实现 Run Store**
+- [x] **Step 3: 实现 Run Store**
 
 Create `src/engine/run-store.ts`:
 
@@ -1342,7 +1342,7 @@ export async function writeCheckpoint(
 }
 ```
 
-- [ ] **Step 4: 运行并确认通过**
+- [x] **Step 4: 运行并确认通过**
 
 Run:
 
@@ -1352,7 +1352,7 @@ pnpm exec vitest run test/ts/engine-run-store.test.ts
 
 Expected: PASS，2 tests。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/engine/run-store.ts test/ts/engine-run-store.test.ts
@@ -1367,7 +1367,7 @@ git commit -m "feat(engine): persist Run trajectory and checkpoints"
 - Create: `test/ts/engine-guardrails.test.ts`
 - Create: `test/ts/engine-evals.test.ts`
 
-- [ ] **Step 1: 写 Guardrails 失败测试**
+- [x] **Step 1: 写 Guardrails 失败测试**
 
 Create `test/ts/engine-guardrails.test.ts`:
 
@@ -1433,7 +1433,7 @@ describe('checkAction', () => {
 });
 ```
 
-- [ ] **Step 2: 写 Runtime Evals 失败测试**
+- [x] **Step 2: 写 Runtime Evals 失败测试**
 
 Create `test/ts/engine-evals.test.ts`:
 
@@ -1459,7 +1459,7 @@ describe('evaluateRuntime', () => {
 });
 ```
 
-- [ ] **Step 3: 运行并确认失败**
+- [x] **Step 3: 运行并确认失败**
 
 Run:
 
@@ -1469,7 +1469,7 @@ pnpm exec vitest run test/ts/engine-guardrails.test.ts test/ts/engine-evals.test
 
 Expected: FAIL。
 
-- [ ] **Step 4: 实现 Guardrails**
+- [x] **Step 4: 实现 Guardrails**
 
 Create `src/engine/guardrails.ts`:
 
@@ -1512,7 +1512,7 @@ export function checkAction(
 }
 ```
 
-- [ ] **Step 5: 实现 Runtime Evals**
+- [x] **Step 5: 实现 Runtime Evals**
 
 Create `src/engine/evals.ts`:
 
@@ -1551,7 +1551,7 @@ export function evaluateRuntime(
 }
 ```
 
-- [ ] **Step 6: 运行并确认通过**
+- [x] **Step 6: 运行并确认通过**
 
 Run:
 
@@ -1561,7 +1561,7 @@ pnpm exec vitest run test/ts/engine-guardrails.test.ts test/ts/engine-evals.test
 
 Expected: PASS，3 tests。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add src/engine/guardrails.ts src/engine/evals.ts test/ts/engine-guardrails.test.ts test/ts/engine-evals.test.ts
@@ -1574,7 +1574,7 @@ git commit -m "feat(engine): enforce guardrails and runtime evals"
 - Create: `src/engine/loop.ts`
 - Create: `test/ts/engine-loop.test.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 Create `test/ts/engine-loop.test.ts`:
 
@@ -1665,7 +1665,7 @@ describe('Skill Engine loop', () => {
 });
 ```
 
-- [ ] **Step 2: 运行并确认失败**
+- [x] **Step 2: 运行并确认失败**
 
 Run:
 
@@ -1675,7 +1675,7 @@ pnpm exec vitest run test/ts/engine-loop.test.ts
 
 Expected: FAIL。
 
-- [ ] **Step 3: 实现共用循环**
+- [x] **Step 3: 实现共用循环**
 
 Create `src/engine/loop.ts`:
 
@@ -1789,7 +1789,7 @@ export function recordOutcome(
 }
 ```
 
-- [ ] **Step 4: 运行并确认通过**
+- [x] **Step 4: 运行并确认通过**
 
 Run:
 
@@ -1799,7 +1799,7 @@ pnpm exec vitest run test/ts/engine-loop.test.ts
 
 Expected: PASS，3 tests。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/engine/loop.ts test/ts/engine-loop.test.ts
@@ -1812,7 +1812,7 @@ git commit -m "feat(engine): add deterministic and adaptive Skill loop"
 - Create: `test/ts/runtime-contract.test.ts`
 - Create: `test/ts/engine-foundation.integration.test.ts`
 
-- [ ] **Step 1: 写 Runtime Adapter 契约测试**
+- [x] **Step 1: 写 Runtime Adapter 契约测试**
 
 Create `test/ts/runtime-contract.test.ts`:
 
@@ -1841,7 +1841,7 @@ describe('RuntimeAdapter contract', () => {
 });
 ```
 
-- [ ] **Step 2: 写 Foundation 集成测试**
+- [x] **Step 2: 写 Foundation 集成测试**
 
 Create `test/ts/engine-foundation.integration.test.ts`:
 
@@ -1951,7 +1951,7 @@ describe('Skill Engine Foundation integration', () => {
 });
 ```
 
-- [ ] **Step 3: 运行 Foundation 测试集**
+- [x] **Step 3: 运行 Foundation 测试集**
 
 Run:
 
@@ -1961,7 +1961,7 @@ npx vitest run test/ts/skill-load.test.ts test/ts/skill-validate.test.ts test/ts
 
 Expected: PASS。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add test/ts/runtime-contract.test.ts test/ts/engine-foundation.integration.test.ts
@@ -1975,7 +1975,7 @@ git commit -m "test(engine): cover Foundation recovery slice"
 - Modify: `package.json`
 - Modify: `assets/manifest.json`
 
-- [ ] **Step 1: 确认 master 版本**
+- [x] **Step 1: 确认 master 版本**
 
 Run:
 
@@ -1985,12 +1985,12 @@ git show master:package.json
 
 Expected: master version 为 `0.3.8`。若不是，停止并按 AGENTS.md 重新计算唯一的下一版本。
 
-- [ ] **Step 2: 更新版本**
+- [x] **Step 2: 更新版本**
 
 将 `package.json` 和 `assets/manifest.json` 的 version 更新为 `0.4.0`。不要新增 Skill
 资产条目，因为 Foundation 尚未发布新 Skill。
 
-- [ ] **Step 3: 写 Changelog**
+- [x] **Step 3: 写 Changelog**
 
 在 `CHANGELOG.md` 顶部新增或追加：
 
@@ -2010,7 +2010,7 @@ Expected: master version 为 `0.3.8`。若不是，停止并按 AGENTS.md 重新
 - **Foundation 契约覆盖**: 新增加载校验、路径安全、状态保留、原子持久化、动作授权、预算、运行期评估、deterministic/adaptive 循环和中断恢复垂直切片测试。
 ```
 
-- [ ] **Step 4: 格式、静态检查和构建**
+- [x] **Step 4: 格式、静态检查和构建**
 
 Run:
 
@@ -2022,7 +2022,7 @@ pnpm build
 
 Expected: 全部 exit 0。
 
-- [ ] **Step 5: shell 与全量测试**
+- [x] **Step 5: shell 与全量测试**
 
 Run:
 
@@ -2033,7 +2033,7 @@ npx vitest run
 
 Expected: 全部 PASS，无 skipped Foundation 测试。
 
-- [ ] **Step 6: 检查差异**
+- [x] **Step 6: 检查差异**
 
 Run:
 
@@ -2045,7 +2045,7 @@ git status --short
 Expected: 无 whitespace error；只出现本计划文件、源码、测试、lockfile、版本、manifest
 和 Changelog 变更，不包含用户已有的 `AGENTS.md` 修改。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add CHANGELOG.md package.json assets/manifest.json
