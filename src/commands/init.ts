@@ -53,7 +53,8 @@ const COMET_BANNER = [
   `  ██║     ██║   ██║██║╚██╔╝██║██╔══╝     ██║   `,
   `  ╚██████╗╚██████╔╝██║ ╚═╝ ██║███████╗   ██║   `,
   `   ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝   ╚═╝   `,
-  `            OpenSpec + Superpowers Workflow       `,
+  `       Agent Skill Harness Phase-Guarded Automation`,
+  `               From Idea To Archive                `,
 ].join('\n');
 
 async function selectScope(options: InitOptions): Promise<InstallScope> {
