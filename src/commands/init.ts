@@ -12,7 +12,7 @@ import {
 } from '../core/skills.js';
 import { installOpenSpec } from '../core/openspec.js';
 import { installSuperpowersForPlatforms } from '../core/superpowers.js';
-import { installCodegraph } from '../core/codegraph.js';
+import { hasCodegraphProjectIndex, installCodegraph } from '../core/codegraph.js';
 import { printVersionInfo } from '../core/version.js';
 
 type InitOptions = {
@@ -369,8 +369,10 @@ export async function initCommand(targetPath: string, options: InitOptions = {})
   }
 
   let cgGlobalStatus: InstallStatus;
+  const codegraphAlreadyIndexed = hasCodegraphProjectIndex(projectPath);
   const shouldInstallCodegraph =
     !options.json &&
+    !codegraphAlreadyIndexed &&
     (options.yes ||
       (await select({
         message: 'Install CodeGraph for semantic code intelligence?',
@@ -387,6 +389,8 @@ export async function initCommand(targetPath: string, options: InitOptions = {})
     for (const r of results) {
       r.codegraph = cgGlobalStatus;
     }
+  } else if (!options.json && codegraphAlreadyIndexed) {
+    log('\n  CodeGraph: skipped (existing .codegraph index detected)');
   } else {
     log('\n  CodeGraph: skipped');
   }

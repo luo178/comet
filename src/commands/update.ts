@@ -13,7 +13,7 @@ import {
   getManifestSkills,
 } from '../core/skills.js';
 import { PLATFORMS, getPlatformSkillsDir, type Platform } from '../core/platforms.js';
-import { installCodegraph } from '../core/codegraph.js';
+import { hasCodegraphProjectIndex, installCodegraph } from '../core/codegraph.js';
 import type { InstallScope } from '../core/types.js';
 import { printVersionInfo } from '../core/version.js';
 
@@ -357,8 +357,11 @@ export async function updateCommand(
   // CodeGraph optional step
   let codegraphStatus: 'installed' | 'failed' | 'skipped' = 'skipped';
   const primaryScope = targets[0]?.scope ?? 'project';
+  const codegraphAlreadyIndexed = hasCodegraphProjectIndex(projectPath);
 
-  if (!options.json) {
+  if (!options.json && codegraphAlreadyIndexed) {
+    log('\n  CodeGraph: skipped (existing .codegraph index detected)');
+  } else if (!options.json) {
     const shouldInstallCodegraph = await select({
       message: 'Install/update CodeGraph for semantic code intelligence?',
       choices: [
