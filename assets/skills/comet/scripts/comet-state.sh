@@ -258,7 +258,7 @@ cmd_init() {
   mkdir -p "$change_dir"
 
   # Set workflow-appropriate defaults
-  local phase build_mode isolation verify_mode context_compression auto_transition
+  local phase build_mode isolation verify_mode context_compression auto_transition review_mode
   phase="open"
   context_compression=$(project_context_compression)
   auto_transition="$(project_auto_transition_default)"
@@ -267,12 +267,14 @@ cmd_init() {
     full)
       build_mode="null"
       tdd_mode="null"
+      review_mode="null"
       isolation="null"
       verify_mode="null"
       ;;
     hotfix|tweak)
       build_mode="direct"
       tdd_mode="direct"
+      review_mode="off"
       isolation="branch"
       verify_mode="light"
       ;;
@@ -293,6 +295,7 @@ build_mode: $build_mode
 build_pause: null
 subagent_dispatch: null
 tdd_mode: $tdd_mode
+review_mode: $review_mode
 isolation: $isolation
 verify_mode: $verify_mode
 auto_transition: $auto_transition
@@ -365,13 +368,13 @@ cmd_set() {
       fi
       validate_enum "$value" "open" "design" "build" "verify" "archive"
       ;;
-    workflow|context_compression|build_mode|build_pause|subagent_dispatch|tdd_mode|isolation|verify_mode|auto_transition|verify_result|verification_report|branch_status|archived|design_doc|plan|verified_at|created_at|direct_override|build_command|verify_command|handoff_context|handoff_hash|base_ref)
+    workflow|context_compression|build_mode|build_pause|subagent_dispatch|tdd_mode|review_mode|isolation|verify_mode|auto_transition|verify_result|verification_report|branch_status|archived|design_doc|plan|verified_at|created_at|direct_override|build_command|verify_command|handoff_context|handoff_hash|base_ref)
       # Valid field
       ;;
     *)
       red "ERROR: Unknown field: '$field'" >&2
       red "Valid fields:" >&2
-      red "  workflow, phase, context_compression, design_doc, plan, build_mode, build_pause, subagent_dispatch, tdd_mode, isolation," >&2
+      red "  workflow, phase, context_compression, design_doc, plan, build_mode, build_pause, subagent_dispatch, tdd_mode, review_mode, isolation," >&2
       red "  verify_mode, auto_transition, verify_result, verification_report, branch_status," >&2
       red "  verified_at, created_at, archived, base_ref, direct_override," >&2
       red "  build_command, verify_command, handoff_context, handoff_hash" >&2
@@ -401,6 +404,9 @@ cmd_set() {
       ;;
     tdd_mode)
       validate_enum "$value" "tdd" "direct"
+      ;;
+    review_mode)
+      validate_enum "$value" "off" "standard" "thorough"
       ;;
     isolation)
       validate_enum "$value" "branch" "worktree"
@@ -494,13 +500,14 @@ require_verification_evidence() {
 
 require_build_decisions() {
   local change_name="$1"
-  local workflow build_mode isolation direct_override subagent_dispatch tdd_mode
+  local workflow build_mode isolation direct_override subagent_dispatch tdd_mode review_mode
   workflow=$(cmd_get "$change_name" "workflow")
   build_mode=$(cmd_get "$change_name" "build_mode")
   isolation=$(cmd_get "$change_name" "isolation")
   direct_override=$(cmd_get "$change_name" "direct_override" 2>/dev/null || true)
   subagent_dispatch=$(cmd_get "$change_name" "subagent_dispatch" 2>/dev/null || true)
   tdd_mode=$(cmd_get "$change_name" "tdd_mode" 2>/dev/null || true)
+  review_mode=$(cmd_get "$change_name" "review_mode" 2>/dev/null || true)
 
   case "$isolation" in
     branch|worktree) ;;
@@ -530,6 +537,11 @@ require_build_decisions() {
 
   if [ "$workflow" = "full" ] && { [ "$tdd_mode" = "null" ] || [ -z "$tdd_mode" ]; }; then
     red "ERROR: Cannot transition '$change_name': tdd_mode must be selected before leaving build (full workflow)" >&2
+    exit 1
+  fi
+
+  if [ "$workflow" = "full" ] && grep -q "^review_mode:" "$(yaml_file_for "$change_name")" 2>/dev/null && { [ "$review_mode" = "null" ] || [ -z "$review_mode" ]; }; then
+    red "ERROR: Cannot transition '$change_name': review_mode must be selected before leaving build (full workflow)" >&2
     exit 1
   fi
 }
@@ -814,7 +826,7 @@ cmd_recover() {
 
   # Read all relevant fields
   local design_doc plan verify_result verify_mode verification_report
-  local branch_status handoff_context handoff_hash isolation build_mode build_pause subagent_dispatch tdd_mode direct_override
+  local branch_status handoff_context handoff_hash isolation build_mode build_pause subagent_dispatch tdd_mode review_mode direct_override
   design_doc=$(cmd_get "$change_name" "design_doc")
   plan=$(cmd_get "$change_name" "plan")
   verify_result=$(cmd_get "$change_name" "verify_result")
@@ -828,6 +840,7 @@ cmd_recover() {
   build_pause=$(cmd_get "$change_name" "build_pause" 2>/dev/null || true)
   subagent_dispatch=$(cmd_get "$change_name" "subagent_dispatch" 2>/dev/null || true)
   tdd_mode=$(cmd_get "$change_name" "tdd_mode" 2>/dev/null || true)
+  review_mode=$(cmd_get "$change_name" "review_mode" 2>/dev/null || true)
   direct_override=$(cmd_get "$change_name" "direct_override" 2>/dev/null || true)
 
   echo "State fields:"
@@ -883,6 +896,7 @@ cmd_recover() {
       field_status "build_mode" "$build_mode"
       field_status "build_pause" "$build_pause"
       field_status "tdd_mode" "$tdd_mode"
+      field_status "review_mode" "$review_mode"
       if [ "$build_mode" = "subagent-driven-development" ] || { [ -n "$subagent_dispatch" ] && [ "$subagent_dispatch" != "null" ]; }; then
         field_status "subagent_dispatch" "$subagent_dispatch"
       fi

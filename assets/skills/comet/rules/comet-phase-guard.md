@@ -106,9 +106,20 @@
 
 ## 阶段退出后自动过渡
 
-guard `--apply` 成功后，必须调用下一阶段的 skill：
+guard `--apply` 成功后，不得在本规则中硬编码下一阶段 skill。必须先运行：
 
-- open → `comet-design`（full）/ `comet-build`（hotfix/tweak）
-- design → `comet-build`
-- build → `comet-verify`
-- verify → `comet-archive`
+```bash
+comet-state next <change-name>
+```
+
+若已通过 `comet-env.sh` 定位脚本，等价运行：
+
+```bash
+"$COMET_BASH" "$COMET_STATE" next <change-name>
+```
+
+按脚本输出决定下一步：
+
+- `NEXT: auto` → 使用 Skill 工具加载 `SKILL` 指向的 skill
+- `NEXT: manual` → 不加载下一 skill，按 `HINT` 提示用户手动继续
+- `NEXT: done` → 流程已完成，无需继续

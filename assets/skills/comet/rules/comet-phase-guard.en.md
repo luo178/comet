@@ -104,9 +104,20 @@ After recovery, first re-run the "Phase-Entry Self-Consistency Check" table: if 
 
 ## Automatic Transition After Phase Exit
 
-After guard `--apply` succeeds, must invoke the next phase's skill:
+After guard `--apply` succeeds, do not hardcode the next skill in this rule. First run:
 
-- open → `comet-design` (full) / `comet-build` (hotfix/tweak)
-- design → `comet-build`
-- build → `comet-verify`
-- verify → `comet-archive`
+```bash
+comet-state next <change-name>
+```
+
+If `comet-env.sh` has already located the scripts, the equivalent command is:
+
+```bash
+"$COMET_BASH" "$COMET_STATE" next <change-name>
+```
+
+Decide the next step from the script output:
+
+- `NEXT: auto` → use the Skill tool to load the skill named by `SKILL`
+- `NEXT: manual` → do not load the next skill; show `HINT` so the user can continue manually
+- `NEXT: done` → the workflow is complete; no further action is needed
