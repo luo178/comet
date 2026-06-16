@@ -50,41 +50,6 @@ fi
 # Normalize to forward slashes, collapse doubles from JSON escaping (\\ → //)
 TARGET=$(printf '%s' "$TARGET" | sed 's|\\|/|g' | sed 's|///*|/|g')
 
-# ── Find active Comet change ─────────────────────────────────────
-
-YAML_FILE=""
-if [ -d "openspec/changes" ]; then
-  for dir in openspec/changes/*/; do
-    [ -d "$dir" ] || continue
-    # Skip archived changes
-    case "$dir" in
-      */archive/*) continue ;;
-    esac
-    if [ -f "${dir}.comet.yaml" ]; then
-      YAML_FILE="${dir}.comet.yaml"
-      break
-    fi
-  done
-fi
-
-# No active change — allow all writes
-if [ -z "$YAML_FILE" ]; then
-  echo "[COMET-HOOK] allowed: no active comet change" >&2
-  exit 0
-fi
-
-# ── Read current phase ───────────────────────────────────────────
-
-PHASE=$(grep "^phase:" "$YAML_FILE" 2>/dev/null \
-  | awk '{print $2}' \
-  | tr -d '[:space:][:cntrl:]' \
-  || true)
-
-if [ -z "$PHASE" ]; then
-  echo "[COMET-HOOK] allowed: no phase in .comet.yaml" >&2
-  exit 0
-fi
-
 # ── Resolve to project-relative path ─────────────────────────────
 
 # Normalize helper: forward slashes only
@@ -119,6 +84,86 @@ case "$RELPATH" in
     fi
     ;;
 esac
+
+# ── Helpers to read .comet.yaml fields ───────────────────────────
+
+is_archived() {
+  grep "^archived:" "$1" 2>/dev/null \
+    | awk '{print $2}' | tr -d '[:space:][:cntrl:]' || true
+}
+
+read_phase() {
+  grep "^phase:" "$1" 2>/dev/null \
+    | awk '{print $2}' | tr -d '[:space:][:cntrl:]' || true
+}
+
+# ── Determine the governing Comet change + phase ─────────────────
+#
+# A write targeting a specific change directory (openspec/changes/<name>/...)
+# must be governed by THAT change's own phase — never by an unrelated
+# active change. Otherwise a change left in the `archive` phase would
+# wrongly block artifact writes for a brand-new change created alongside it.
+
+PHASE=""
+
+case "$RELPATH" in
+  openspec/changes/*/*)
+    _rest="${RELPATH#openspec/changes/}"
+    _own_change="${_rest%%/*}"
+    if [ -n "$_own_change" ] && [ "$_own_change" != "archive" ]; then
+      _own_yaml="openspec/changes/${_own_change}/.comet.yaml"
+      if [ -f "$_own_yaml" ]; then
+        if [ "$(is_archived "$_own_yaml")" = "true" ]; then
+          # This change is already archived — its own writes are unrestricted
+          echo "[COMET-HOOK] allowed: $RELPATH (own change archived)" >&2
+          exit 0
+        fi
+        PHASE=$(read_phase "$_own_yaml")
+      else
+        # Change directory exists but state file not yet written
+        # (artifacts are created before .comet.yaml during /comet-open).
+        # Treat as `open` so proposal/design/tasks/specs are allowed.
+        PHASE="open"
+      fi
+    fi
+    ;;
+esac
+
+# Fallback: writes outside a specific change directory are governed by
+# the first active (non-archived) change.
+if [ -z "$PHASE" ]; then
+  YAML_FILE=""
+  if [ -d "openspec/changes" ]; then
+    for dir in openspec/changes/*/; do
+      [ -d "$dir" ] || continue
+      # Skip archived changes directory
+      case "$dir" in
+        */archive/*) continue ;;
+      esac
+      if [ -f "${dir}.comet.yaml" ]; then
+        # Skip changes already marked as archived
+        if [ "$(is_archived "${dir}.comet.yaml")" = "true" ]; then
+          continue
+        fi
+        YAML_FILE="${dir}.comet.yaml"
+        break
+      fi
+    done
+  fi
+
+  # No active change — allow all writes
+  if [ -z "$YAML_FILE" ]; then
+    echo "[COMET-HOOK] allowed: no active comet change" >&2
+    exit 0
+  fi
+
+  PHASE=$(read_phase "$YAML_FILE")
+fi
+
+if [ -z "$PHASE" ]; then
+  echo "[COMET-HOOK] allowed: no phase in .comet.yaml" >&2
+  exit 0
+fi
 
 # ── Whitelist: phase-aware allowed paths ─────────────────────────
 
