@@ -238,6 +238,28 @@ describeShell('comet shell scripts', () => {
     expect(yaml).toContain('tdd_mode: null');
   }, 20_000);
 
+  it('initializes review_mode as null for full workflow', async () => {
+    const result = runBash(tmpDir, stateScript, ['init', 'review-defaults', 'full']);
+    const yaml = await fs.readFile(
+      path.join(tmpDir, 'openspec', 'changes', 'review-defaults', '.comet.yaml'),
+      'utf-8',
+    );
+
+    expect(result.status).toBe(0);
+    expect(yaml).toContain('review_mode: null');
+  }, 20_000);
+
+  it('initializes review_mode as off for hotfix workflow', async () => {
+    const result = runBash(tmpDir, stateScript, ['init', 'review-hotfix', 'hotfix']);
+    const yaml = await fs.readFile(
+      path.join(tmpDir, 'openspec', 'changes', 'review-hotfix', '.comet.yaml'),
+      'utf-8',
+    );
+
+    expect(result.status).toBe(0);
+    expect(yaml).toContain('review_mode: off');
+  }, 20_000);
+
   it('initializes tdd_mode as direct for hotfix workflow', async () => {
     const result = runBash(tmpDir, stateScript, ['init', 'tdd-hotfix', 'hotfix']);
     const yaml = await fs.readFile(
@@ -1428,6 +1450,60 @@ describeShell('comet shell scripts', () => {
     expect(result.stderr).toContain('[PASS] tdd_mode selected');
   }, 20_000);
 
+  it('blocks build completion until review_mode is selected for full workflow', async () => {
+    await createChange(
+      tmpDir,
+      'missing-review-mode',
+      [
+        'workflow: full',
+        'phase: build',
+        'build_mode: executing-plans',
+        'build_pause: null',
+        'subagent_dispatch: null',
+        'tdd_mode: direct',
+        'review_mode: null',
+        'isolation: branch',
+        'verify_mode: null',
+        'design_doc: null',
+        'plan: null',
+        'verify_result: pending',
+        'verified_at: null',
+        'archived: false',
+        '',
+      ].join('\n'),
+      '- [x] done\n',
+    );
+    await writeFile(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { build: 'node -e "process.exit(0)"' } }),
+    );
+
+    const guard = runBash(tmpDir, guardScript, ['missing-review-mode', 'build']);
+    const transition = runBash(tmpDir, stateScript, [
+      'transition',
+      'missing-review-mode',
+      'build-complete',
+    ]);
+
+    expect(guard.status).not.toBe(0);
+    expect(guard.stderr).toContain('[FAIL] review_mode selected');
+    expect(guard.stderr).toContain('review_mode must be off, standard, or thorough');
+    expect(transition.status).not.toBe(0);
+    expect(transition.stderr).toContain('review_mode must be selected');
+  }, 20_000);
+
+  it('allows setting review_mode to off, standard, and thorough', async () => {
+    runBash(tmpDir, stateScript, ['init', 'review-mode-set', 'full']);
+
+    for (const value of ['off', 'standard', 'thorough']) {
+      const set = runBash(tmpDir, stateScript, ['set', 'review-mode-set', 'review_mode', value]);
+      const get = runBash(tmpDir, stateScript, ['get', 'review-mode-set', 'review_mode']);
+
+      expect(set.status).toBe(0);
+      expect(get.stdout.trim()).toBe(value);
+    }
+  }, 20_000);
+
   it('allows setting build_pause to plan-ready and back to null', async () => {
     await createChange(
       tmpDir,
@@ -1548,6 +1624,36 @@ describeShell('comet shell scripts', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("tdd_mode='always' is not valid");
+    expect(result.stderr).toContain('FATAL: .comet.yaml schema validation failed');
+  }, 20_000);
+
+  it('rejects invalid review_mode values during schema validation', async () => {
+    await createChange(
+      tmpDir,
+      'invalid-review-mode',
+      [
+        'workflow: full',
+        'phase: build',
+        'build_mode: executing-plans',
+        'build_pause: null',
+        'subagent_dispatch: null',
+        'tdd_mode: direct',
+        'review_mode: noisy',
+        'isolation: branch',
+        'verify_mode: null',
+        'design_doc: null',
+        'plan: null',
+        'verify_result: pending',
+        'verified_at: null',
+        'archived: false',
+        '',
+      ].join('\n'),
+    );
+
+    const result = runBash(tmpDir, guardScript, ['invalid-review-mode', 'build']);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("review_mode='noisy' is not valid");
     expect(result.stderr).toContain('FATAL: .comet.yaml schema validation failed');
   }, 20_000);
 
