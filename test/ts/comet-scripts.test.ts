@@ -3709,5 +3709,89 @@ describeShell('comet shell scripts', () => {
 
       expect(result.status).toBe(0);
     }, 20_000);
+
+    it('skips changes with archived: true still in changes/ directory', async () => {
+      // Old change: archived but not yet moved to archive/ subdirectory
+      await createChange(
+        tmpDir,
+        'old-change',
+        [
+          'workflow: full',
+          'phase: archive',
+          'context_compression: off',
+          'build_mode: executing-plans',
+          'build_pause: null',
+          'subagent_dispatch: null',
+          'tdd_mode: tdd',
+          'isolation: branch',
+          'verify_mode: full',
+          'base_ref: null',
+          'design_doc: docs/superpowers/specs/test.md',
+          'plan: docs/superpowers/plans/test.md',
+          'verify_result: pass',
+          'verification_report: report.md',
+          'branch_status: handled',
+          'created_at: 2026-06-06',
+          'verified_at: 2026-06-06',
+          'archived: true',
+          'handoff_context: null',
+          'handoff_hash: null',
+          '',
+        ].join('\n'),
+      );
+
+      const srcDir = path.join(tmpDir, 'src');
+      await fs.mkdir(srcDir, { recursive: true });
+      const targetFile = path.join(srcDir, 'new-feature.ts');
+
+      const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
+
+      expect(result.status).toBe(0);
+    }, 20_000);
+
+    it('allows new change artifact writes while another change is in archive phase (no state file yet)', async () => {
+      // Existing change stalled in archive phase, not yet archived
+      await createChange(
+        tmpDir,
+        'old-pending-archive',
+        ['workflow: full', 'phase: archive', 'archived: false', ''].join('\n'),
+      );
+
+      // Brand-new change being created: artifacts written before .comet.yaml exists
+      const newChangeDir = path.join(tmpDir, 'openspec', 'changes', 'refine-requirements');
+      await fs.mkdir(newChangeDir, { recursive: true });
+      const targetFile = path.join(newChangeDir, 'proposal.md');
+
+      const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
+
+      expect(result.status).toBe(0);
+    }, 20_000);
+
+    it('governs change-dir writes by the change own phase, not an unrelated active change', async () => {
+      // Change A: stalled in archive phase, not yet archived
+      await createChange(
+        tmpDir,
+        'a-old-archive',
+        ['workflow: full', 'phase: archive', 'archived: false', ''].join('\n'),
+      );
+      // Change B: freshly created, its own state file at phase: open
+      await createChange(
+        tmpDir,
+        'b-new-open',
+        ['workflow: full', 'phase: open', 'archived: false', ''].join('\n'),
+      );
+
+      const targetFile = path.join(
+        tmpDir,
+        'openspec',
+        'changes',
+        'b-new-open',
+        'proposal.md',
+      );
+
+      const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
+
+      expect(result.status).toBe(0);
+    }, 20_000);
   });
 });
