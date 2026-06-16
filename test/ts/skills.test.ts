@@ -631,7 +631,7 @@ describe('skills', () => {
       // MEDIUM: comet-design brainstorming does not write Design Doc before confirmation
       expect(zhDesign).toContain('brainstorming 阶段不写入 Design Doc 文件');
       expect(zhDesign).toContain('增量更新 `brainstorm-summary.md`');
-      expect(zhDesign).toContain('### 1e. 主动上下文压缩门');
+      expect(zhDesign).toContain('### 1e. 主动式上下文压缩');
 
       // MEDIUM: comet-verify Spec drift requires user choice
       expect(zhVerify).toContain(
