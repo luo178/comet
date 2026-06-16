@@ -2386,6 +2386,95 @@ describeShell('comet shell scripts', () => {
     expect(phase.stdout.trim()).toBe('build');
   });
 
+  it('blocks open-complete when an open artifact is missing', async () => {
+    await createChange(
+      tmpDir,
+      'open-missing-artifact',
+      ['workflow: full', 'phase: open', 'design_doc: null', 'archived: false', ''].join('\n'),
+    );
+    await fs.rm(path.join(tmpDir, 'openspec/changes/open-missing-artifact/design.md'));
+
+    const result = runBash(tmpDir, stateScript, [
+      'transition',
+      'open-missing-artifact',
+      'open-complete',
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('design.md must exist and be non-empty');
+  });
+
+  it('blocks design-complete when design_doc evidence is missing', async () => {
+    await createChange(
+      tmpDir,
+      'design-no-doc',
+      ['workflow: full', 'phase: design', 'design_doc: null', 'archived: false', ''].join('\n'),
+    );
+
+    const result = runBash(tmpDir, stateScript, ['transition', 'design-no-doc', 'design-complete']);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('design_doc must point to an existing');
+  });
+
+  it('allows design-complete once design_doc points to an existing file', async () => {
+    await createChange(
+      tmpDir,
+      'design-with-doc',
+      ['workflow: full', 'phase: design', 'design_doc: null', 'archived: false', ''].join('\n'),
+    );
+    const docPath = 'docs/superpowers/design.md';
+    await writeFile(path.join(tmpDir, docPath), '# Design Doc\n');
+    runBash(tmpDir, stateScript, ['set', 'design-with-doc', 'design_doc', docPath]);
+
+    const result = runBash(tmpDir, stateScript, [
+      'transition',
+      'design-with-doc',
+      'design-complete',
+    ]);
+    const phase = runBash(tmpDir, stateScript, ['get', 'design-with-doc', 'phase']);
+
+    expect(result.status).toBe(0);
+    expect(phase.stdout.trim()).toBe('build');
+  });
+
+  it('blocks direct phase writes but allows the COMET_FORCE_PHASE escape hatch', async () => {
+    await createChange(
+      tmpDir,
+      'phase-jump',
+      ['workflow: full', 'phase: open', 'design_doc: null', 'archived: false', ''].join('\n'),
+    );
+
+    const blocked = runBash(tmpDir, stateScript, ['set', 'phase-jump', 'phase', 'build']);
+    expect(blocked.status).toBe(1);
+    expect(blocked.stderr).toContain("Setting 'phase' directly is not allowed");
+
+    const forced = runBash(tmpDir, stateScript, ['set', 'phase-jump', 'phase', 'build'], {
+      COMET_FORCE_PHASE: '1',
+    });
+    expect(forced.status).toBe(0);
+    const phase = runBash(tmpDir, stateScript, ['get', 'phase-jump', 'phase']);
+    expect(phase.stdout.trim()).toBe('build');
+  });
+
+  it('blocks archived transition until verify_result is pass', async () => {
+    await createChange(
+      tmpDir,
+      'archive-not-passed',
+      ['workflow: full', 'phase: archive', 'verify_result: pending', 'archived: false', ''].join(
+        '\n',
+      ),
+    );
+
+    const blocked = runBash(tmpDir, stateScript, ['transition', 'archive-not-passed', 'archived']);
+    expect(blocked.status).toBe(1);
+    expect(blocked.stderr).toContain('verify_result must be pass before archiving');
+
+    runBash(tmpDir, stateScript, ['set', 'archive-not-passed', 'verify_result', 'pass']);
+    const ok = runBash(tmpDir, stateScript, ['transition', 'archive-not-passed', 'archived']);
+    expect(ok.status).toBe(0);
+  });
+
   it('transitions verify-pass and verify-fail through script-owned fields', async () => {
     await createChange(
       tmpDir,
@@ -3788,6 +3877,63 @@ describeShell('comet shell scripts', () => {
         'b-new-open',
         'proposal.md',
       );
+
+      const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
+
+      expect(result.status).toBe(0);
+    }, 20_000);
+
+    it('blocks full-workflow build source writes when design_doc is null (illegal jump)', async () => {
+      await createChange(
+        tmpDir,
+        'full-build-no-doc',
+        ['workflow: full', 'phase: build', 'design_doc: null', 'archived: false', ''].join('\n'),
+      );
+
+      const srcDir = path.join(tmpDir, 'src');
+      await fs.mkdir(srcDir, { recursive: true });
+      const targetFile = path.join(srcDir, 'feature.ts');
+
+      const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
+
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('BLOCKED');
+      expect(result.stderr).toContain('design_doc');
+    }, 20_000);
+
+    it('allows preset-workflow build source writes when design_doc is null', async () => {
+      await createChange(
+        tmpDir,
+        'hotfix-build-no-doc',
+        ['workflow: hotfix', 'phase: build', 'design_doc: null', 'archived: false', ''].join('\n'),
+      );
+
+      const srcDir = path.join(tmpDir, 'src');
+      await fs.mkdir(srcDir, { recursive: true });
+      const targetFile = path.join(srcDir, 'fix.ts');
+
+      const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
+
+      expect(result.status).toBe(0);
+    }, 20_000);
+
+    it('allows full-workflow build source writes once design_doc points to a file', async () => {
+      await createChange(
+        tmpDir,
+        'full-build-with-doc',
+        [
+          'workflow: full',
+          'phase: build',
+          'design_doc: docs/superpowers/design.md',
+          'archived: false',
+          '',
+        ].join('\n'),
+      );
+      await writeFile(path.join(tmpDir, 'docs/superpowers/design.md'), '# Design Doc\n');
+
+      const srcDir = path.join(tmpDir, 'src');
+      await fs.mkdir(srcDir, { recursive: true });
+      const targetFile = path.join(srcDir, 'feature.ts');
 
       const result = runHookGuard(tmpDir, hookGuardScript, hookStdin(targetFile));
 

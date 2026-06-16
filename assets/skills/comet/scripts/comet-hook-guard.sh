@@ -97,6 +97,11 @@ read_phase() {
     | awk '{print $2}' | tr -d '[:space:][:cntrl:]' || true
 }
 
+read_field() {
+  grep "^$1:" "$2" 2>/dev/null \
+    | head -1 | awk '{print $2}' | tr -d '[:space:][:cntrl:]' || true
+}
+
 # ── Determine the governing Comet change + phase ─────────────────
 #
 # A write targeting a specific change directory (openspec/changes/<name>/...)
@@ -105,6 +110,8 @@ read_phase() {
 # wrongly block artifact writes for a brand-new change created alongside it.
 
 PHASE=""
+# Path to the .comet.yaml that governs this write (used for deeper invariant checks)
+GOV_YAML=""
 
 case "$RELPATH" in
   openspec/changes/*/*)
@@ -119,6 +126,7 @@ case "$RELPATH" in
           exit 0
         fi
         PHASE=$(read_phase "$_own_yaml")
+        GOV_YAML="$_own_yaml"
       else
         # Change directory exists but state file not yet written
         # (artifacts are created before .comet.yaml during /comet-open).
@@ -158,6 +166,7 @@ if [ -z "$PHASE" ]; then
   fi
 
   PHASE=$(read_phase "$YAML_FILE")
+  GOV_YAML="$YAML_FILE"
 fi
 
 if [ -z "$PHASE" ]; then
@@ -267,6 +276,28 @@ esac
 
 case "$PHASE" in
   build|verify)
+    # Full workflow must have a Design Doc before any source write in build/verify.
+    # Catches illegal open→build / design→build jumps that skipped the design phase
+    # (e.g. misclassified preset, direct `set phase`, or bare transition).
+    if [ -n "$GOV_YAML" ]; then
+      _wf=$(read_field "workflow" "$GOV_YAML")
+      _dd=$(read_field "design_doc" "$GOV_YAML")
+      if [ "$_wf" = "full" ] && { [ -z "$_dd" ] || [ "$_dd" = "null" ]; }; then
+        echo "" >&2
+        echo "╔══════════════════════════════════════════╗" >&2
+        echo "║     COMET PHASE GUARD — WRITE BLOCKED    ║" >&2
+        echo "╚══════════════════════════════════════════╝" >&2
+        echo "" >&2
+        echo "  当前阶段: $PHASE（workflow: full），但 design_doc 为空" >&2
+        echo "  目标文件: $RELPATH" >&2
+        echo "" >&2
+        echo "  ❌ 检测到非法阶段跳转：full workflow 在没有 Design Doc 的情况下进入 $PHASE" >&2
+        echo "  ✅ 正确流程：先在 design 阶段创建 Design Doc 并运行 comet-guard design --apply" >&2
+        echo "  💡 运行 /comet-design 补齐设计；如确为修复，用 comet-state set design_doc <path>" >&2
+        echo "" >&2
+        exit 2
+      fi
+    fi
     # Code writes allowed in build and verify
     echo "[COMET-HOOK] allowed: $RELPATH (phase: $PHASE)" >&2
     exit 0
