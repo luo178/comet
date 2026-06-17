@@ -3,7 +3,7 @@ import os from 'os';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-import { select } from '@inquirer/prompts';
+import { checkbox } from '@inquirer/prompts';
 import { fileExists, readDir, readJson } from '../utils/file-system.js';
 import { getBaseDir } from '../core/detect.js';
 import {
@@ -13,9 +13,15 @@ import {
   getManifestSkills,
 } from '../core/skills.js';
 import { PLATFORMS, getPlatformSkillsDir, type Platform } from '../core/platforms.js';
-import { hasCodegraphProjectIndex, installCodegraph } from '../core/codegraph.js';
+import {
+  hasCodegraphProjectIndex,
+  installCodegraph,
+  resolveCodegraphCommand,
+} from '../core/codegraph.js';
+import { isCommandAvailable } from '../core/openspec.js';
 import type { InstallScope } from '../core/types.js';
 import { printVersionInfo } from '../core/version.js';
+import { t, type TranslationKey } from './i18n.js';
 
 const PACKAGE_NAME = '@rpamis/comet';
 const OFFICIAL_REGISTRY = 'https://registry.npmjs.org';
@@ -39,6 +45,8 @@ interface DetectTargetsOptions {
   scopes?: InstallScope[];
   globalBaseDir?: string;
 }
+
+type NpmDepId = 'openspec' | 'superpowers' | 'codegraph';
 
 function languageToSkillsDir(language: string | undefined, fallback: SkillLanguage): string {
   return (language ?? fallback) === 'zh' ? 'skills-zh' : 'skills';
@@ -92,7 +100,7 @@ async function detectInstalledCometLanguage(
 
       try {
         const content = await fs.readFile(skillPath, 'utf-8');
-        if (/[\u3400-\u9fff]/u.test(content)) return 'zh';
+        if (/[㐀-鿿]/u.test(content)) return 'zh';
       } catch {
         // Fall through to the default English asset set if the file cannot be read.
       }
@@ -215,6 +223,68 @@ async function updateCometNpmPackage(
   });
 }
 
+interface NpmDepState {
+  id: NpmDepId;
+  installed: boolean;
+}
+
+async function selectNpmDepsForUpdate(
+  projectPath: string,
+  options: UpdateOptions,
+  lang: string,
+): Promise<Set<NpmDepId>> {
+  const openSpecInstalled = isCommandAvailable('openspec');
+  const codegraphInstalled =
+    hasCodegraphProjectIndex(projectPath) || resolveCodegraphCommand() !== null;
+  const superpowersInstalled = isCommandAvailable('skills');
+
+  const states: NpmDepState[] = [
+    { id: 'openspec', installed: openSpecInstalled },
+    { id: 'superpowers', installed: superpowersInstalled },
+    { id: 'codegraph', installed: codegraphInstalled },
+  ];
+
+  const depLabel: Record<NpmDepId, (installed: boolean) => string> = {
+    openspec: (installed) =>
+      installed ? t(lang, 'npmDepOpenSpecInstalled') : t(lang, 'npmDepOpenSpec'),
+    superpowers: (installed) =>
+      installed ? t(lang, 'npmDepSuperpowersInstalled') : t(lang, 'npmDepSuperpowers'),
+    codegraph: (installed) =>
+      installed ? t(lang, 'npmDepCodegraphInstalled') : t(lang, 'npmDepCodegraph'),
+  };
+
+  const depHint: Partial<Record<NpmDepId, string>> = {
+    superpowers: t(lang, 'npmDepSuperpowersHint'),
+  };
+
+  const choices = states.map(({ id, installed }) => {
+    const choice: {
+      name: string;
+      value: NpmDepId;
+      checked: boolean;
+      description?: string;
+    } = {
+      name: depLabel[id](installed),
+      value: id,
+      checked: false,
+    };
+    if (depHint[id]) {
+      choice.description = depHint[id];
+    }
+    return choice;
+  });
+
+  if (options.skipNpm) {
+    return new Set();
+  }
+
+  const selected = await checkbox({
+    message: t(lang, 'selectNpmDeps'),
+    choices,
+  });
+  return new Set(selected as NpmDepId[]);
+}
+
 export async function updateCommand(
   targetPath: string,
   options: UpdateOptions = {},
@@ -222,7 +292,9 @@ export async function updateCommand(
   const projectPath = path.resolve(targetPath);
   const log = options.json ? () => undefined : console.log;
 
-  log(`\n  Comet Update`);
+  const lang = options.language ?? 'en';
+
+  log(`\n  ${t(lang, 'updateTitle')}`);
   if (!options.json) {
     await printVersionInfo(log);
   }
@@ -231,7 +303,7 @@ export async function updateCommand(
   const packageScope = options.scope ?? (await detectCometPackageScope(projectPath));
   let npmStatus: 'updated' | 'failed' | 'skipped' = 'skipped';
   if (!options.skipNpm) {
-    log(`  Updating npm package (${packageScope} scope)...`);
+    log(`  ${t(lang, 'updatingNpmPackage')} (${packageScope} scope)...`);
     log(`    $ ${formatNpmUpdateCommand(packageScope)}`);
     const npmUpdated = await updateCometNpmPackage(
       packageScope,
@@ -241,10 +313,10 @@ export async function updateCommand(
     );
     if (npmUpdated) {
       npmStatus = 'updated';
-      log(`  npm package: updated to latest ${PACKAGE_NAME}`);
+      log(`  ${t(lang, 'npmPackageUpdated')} ${PACKAGE_NAME}`);
     } else {
       npmStatus = 'failed';
-      log(`  npm package: update failed, continuing with bundled skills`);
+      log(`  ${t(lang, 'npmPackageFailed')}`);
     }
   }
 
@@ -273,11 +345,11 @@ export async function updateCommand(
       );
       return;
     }
-    log('\n  No platforms with comet skills installed. Run `comet init` first.\n');
+    log(`\n  ${t(lang, 'noInstallsFound')}\n`);
     return;
   }
 
-  log(`\n  Updating comet skills on ${targets.length} installed target(s):`);
+  log(`\n  ${t(lang, 'updatingSkillsOnTargets')} ${targets.length} target(s):`);
   for (const target of targets) {
     const language = options.language ?? target.language;
     const scopeLabel = target.scope === 'global' ? 'global' : `project (${projectPath})`;
@@ -286,8 +358,9 @@ export async function updateCommand(
     log(`      $ ${formatSkillUpdateCommand(target.scope, target.platform, languageSkillsDir)}`);
   }
 
-  // Copy skills for each platform (overwrite)
-  log(`\n  Copying ${(await getManifestSkills()).length} skill files...\n`);
+  log(
+    `\n  ${t(lang, 'copyingSkillsFiles')} ${(await getManifestSkills()).length} skill files...\n`,
+  );
 
   let totalCopied = 0;
   let totalRulesCopied = 0;
@@ -315,10 +388,9 @@ export async function updateCommand(
       command: formatSkillUpdateCommand(target.scope, target.platform, languageSkillsDir),
     });
     log(
-      `  ${target.platform.name} (${target.scope}, ${languageSkillsDir}): ${copied} copied, ${skipped} skipped`,
+      `  ${target.platform.name} (${target.scope}, ${languageSkillsDir}): ${copied} ${t(lang, 'skillsCopiedSkipped')} ${skipped} skipped`,
     );
 
-    // Distribute anti-drift rules to platforms that support them
     try {
       const { copied: ruleCopied } = await copyCometRulesForPlatform(
         baseDir,
@@ -328,13 +400,14 @@ export async function updateCommand(
       );
       totalRulesCopied += ruleCopied;
       if (ruleCopied > 0) {
-        log(`  Comet rules -> ${target.platform.name}: ${ruleCopied} rule(s) updated`);
+        log(`  Comet rules -> ${target.platform.name}: ${ruleCopied} ${t(lang, 'rulesUpdated')}`);
       }
     } catch (err) {
-      log(`  Comet rules -> ${target.platform.name}: failed (${(err as Error).message})`);
+      log(
+        `  Comet rules -> ${target.platform.name}: ${t(lang, 'rulesFailed')} (${(err as Error).message})`,
+      );
     }
 
-    // Install hooks for platforms that support them
     if (target.platform.supportsHooks) {
       try {
         const { installed, reason } = await installCometHooksForPlatform(
@@ -344,38 +417,36 @@ export async function updateCommand(
         );
         if (installed) {
           totalHooksInstalled++;
-          log(`  Comet hooks -> ${target.platform.name}: phase guard hook updated`);
+          log(`  Comet hooks -> ${target.platform.name}: ${t(lang, 'hooksUpdated')}`);
         } else if (reason) {
-          log(`  Comet hooks -> ${target.platform.name}: skipped (${reason})`);
+          log(`  Comet hooks -> ${target.platform.name}: ${t(lang, 'hooksSkipped')} (${reason})`);
         }
       } catch (err) {
-        log(`  Comet hooks -> ${target.platform.name}: failed (${(err as Error).message})`);
+        log(
+          `  Comet hooks -> ${target.platform.name}: ${t(lang, 'hooksFailed')} (${(err as Error).message})`,
+        );
       }
     }
   }
 
-  // CodeGraph optional step
   let codegraphStatus: 'installed' | 'failed' | 'skipped' = 'skipped';
   const primaryScope = targets[0]?.scope ?? 'project';
   const codegraphAlreadyIndexed = hasCodegraphProjectIndex(projectPath);
 
-  if (!options.json && codegraphAlreadyIndexed) {
+  if (options.json) {
+    codegraphStatus = 'skipped';
+  } else if (codegraphAlreadyIndexed) {
     log('\n  CodeGraph: skipped (existing .codegraph index detected)');
-  } else if (!options.json) {
-    const shouldInstallCodegraph = await select({
-      message: 'Install/update CodeGraph for semantic code intelligence?',
-      choices: [
-        { name: 'Yes (recommended — saves ~16% cost · cuts ~58% tool calls)', value: true },
-        { name: 'No', value: false },
-      ],
-    });
+  } else {
+    const selectedNpmDeps = await selectNpmDepsForUpdate(projectPath, options, lang);
+    const shouldInstallCodegraph = selectedNpmDeps.has('codegraph');
 
     if (shouldInstallCodegraph) {
-      log('\n  Installing CodeGraph...');
-      codegraphStatus = await installCodegraph(projectPath, primaryScope);
+      log(`\n  ${t(lang, 'installingCG')}`);
+      codegraphStatus = await installCodegraph(projectPath, primaryScope, true);
       log(`  CodeGraph: ${codegraphStatus}`);
     } else {
-      log('\n  CodeGraph: skipped');
+      log(`\n  CodeGraph: ${t(lang, 'cgSkippedByUser')}`);
     }
   }
 
@@ -405,13 +476,13 @@ export async function updateCommand(
 
   const languages = [...new Set(targetResults.map((target) => target.language))].join(', ');
   const scopes = [...new Set(targetResults.map((target) => target.scope))].join(', ');
-  log(`\n  Summary:`);
-  log(`    npm: ${npmStatus}${options.skipNpm ? '' : ` (${packageScope})`}`);
-  log(`    skills: ${targets.length} target(s), ${totalCopied} files updated`);
-  log(`    codegraph: ${codegraphStatus}`);
-  log(`    scope: ${scopes}`);
-  log(`    language: ${languages}`);
-  log(`\n  Update complete.\n`);
+  log(`\n  ${t(lang, 'summary')}`);
+  log(`    ${t(lang, 'summaryNpm')} ${npmStatus}${options.skipNpm ? '' : ` (${packageScope})`}`);
+  log(`    ${t(lang, 'summarySkills')} ${targets.length} target(s), ${totalCopied} files updated`);
+  log(`    ${t(lang, 'summaryCodegraph')} ${codegraphStatus}`);
+  log(`    ${t(lang, 'summaryScope')} ${scopes}`);
+  log(`    ${t(lang, 'summaryLanguage')} ${languages}`);
+  log(`\n  ${t(lang, 'updateComplete')}\n`);
 }
 
 export {
@@ -422,4 +493,4 @@ export {
   formatNpmUpdateCommand,
   formatSkillUpdateCommand,
 };
-export type { InstalledCometTarget, SkillLanguage };
+export type { InstalledCometTarget, SkillLanguage, TranslationKey };

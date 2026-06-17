@@ -11,6 +11,12 @@ All notable changes to @rpamis/comet will be documented in this file.
 - **CodeGraph setup detection**: Fixed `comet init` and `comet update` prompting for CodeGraph setup even when the project already has a `.codegraph/` index. Existing project indexes now skip the optional CodeGraph prompt and install step, and CodeGraph CLI resolution can use a pnpm global binary before falling back to npm global installation.
 - **Phase guard auto-transition handoff**: Fixed the injected Comet phase guard rule hardcoding the next skill after `guard --apply`, which could bypass `auto_transition: false`. The rule now delegates post-guard handoff to `comet-state next <change-name>` and follows `NEXT: auto|manual|done` so manual phase boundaries are respected.
 
+### Added
+
+- **CLI i18n shared module**: Extracted the init-time translation table to `src/commands/i18n.ts` so init, update, and future commands can share English/Chinese strings consistently instead of duplicating tables per command.
+- **Optional npm dependency prompts in init/update**: `comet init` and `comet update` now present a multi-select for OpenSpec CLI, Superpowers (via `npx skills add`), and CodeGraph CLI instead of force-installing them. Items not yet detected on the system default to checked; already-installed items default to unchecked so users can opt into upgrades without being forced. The Superpowers entry also surfaces a recommendation to install v6.0.0+ (≈2× faster, ≈50% fewer tokens).
+- **`--language` option for `comet init`**: New CLI flag (`en`/`zh`) that selects skill language non-interactively, mirroring the existing `comet update --language` option ([#109](https://github.com/rpamis/comet/pull/109)).
+
 ### Changed
 
 - **Tagline rebrand**: Changed the Comet tagline in the `comet init` banner and the `package.json` / CLI `--description` from "OpenSpec + Superpowers dual-star development workflow" to "Agent Skill Harness Phase-Guarded Automation From Idea To Archive", positioning Comet by its core value (a phase-guarded agent skill harness) rather than by its underlying OpenSpec + Superpowers dependencies.
@@ -21,6 +27,8 @@ All notable changes to @rpamis/comet will be documented in this file.
 - **Executable permission loss on macOS after update**: `bin/comet.js` and all shell scripts under `assets/skills/comet/scripts/` were committed with git mode `100644` (non-executable). After an npm update, macOS users lost execute permissions on the `comet` CLI entry point. Changed all 8 files to `100755` in git so npm installs always preserve the executable bit.
 - **`review_mode` field for code review control**: Added `.comet.yaml` field `review_mode` (`off` / `standard` / `thorough`) controlling automatic code review during build and verify phases. `comet-build` requires user selection before execution; `comet-verify` and subagent dispatch adapt behavior per mode; `comet-hotfix` defaults to `off`. Validated by `comet-state.sh`, `comet-guard.sh`, and `comet-yaml-validate.sh`.
 - **Uninstall by platform selection**: `comet uninstall` now shows a checkbox prompt when multiple platforms are detected, allowing users to selectively uninstall specific platforms instead of removing all at once. Single-target scenarios use a simple yes/no confirmation. `--force` and `--json` flags retain the existing all-at-once behavior.
+- **Full i18n coverage for CLI prompts**: Extended translation coverage from `init`-only to also cover `update` (banner, npm update progress, skills copy progress, summary, codegraph prompt). All user-facing strings now have English and Chinese variants ([#109](https://github.com/rpamis/comet/pull/109)).
+- **Codex plugin-installed Superpowers detection**: `comet init` now detects Superpowers already installed via the Codex plugin cache (`~/.codex/plugins/cache/...`), preventing duplicate re-installation — parallel to the existing Claude Code and OpenCode plugin detection ([#115](https://github.com/rpamis/comet/pull/115)).
 
 ### Tests
 

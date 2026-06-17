@@ -1,5 +1,55 @@
 # News
 
+## 0.3.9 — 2026-06-16
+
+### 阶段守护加固
+
+补齐 `open → build`（跳过 `design`）的检测漏洞：`comet-state.sh` 在每次阶段前进时强制证据校验，`comet-hook-guard.sh` 在 `design_doc` 为空时直接拦截源码写入，`comet-phase-guard` 规则新增前置制品自检。Hook 守卫按 change 隔离，避免旧 change 的 phase 误拦新 change 的写入。
+
+### 可选 npm 依赖
+
+`comet init` / `comet update` 不再强制安装 OpenSpec、Superpowers、CodeGraph CLI，改为多选提示：未检测到的依赖默认勾选，已存在的默认不勾（用户可自主升级）。Superpowers 项额外推荐安装 v6.0.0+（速度快约 2 倍，节省约 50% token）。
+
+### CLI 国际化
+
+`comet init` 新增 `--language en|zh` 选项；`update` 命令完整支持中英文提示（横幅、npm 更新进度、摘要、CodeGraph 提示等）。新增 `src/commands/i18n.ts` 共享翻译表。
+
+### 其他
+
+- `comet init` 检测 Codex 插件缓存中已安装的 Superpowers（`~/.codex/plugins/cache/...`），避免重复安装（[#115](https://github.com/rpamis/comet/pull/115)）。
+- 中文术语规范化：`gate` 不再直译为"门"。
+- `comet uninstall` 多平台场景改为 checkbox 选择。
+- `.comet/config.yaml` 新增 `review_mode: off|standard|thorough` 项目级默认。
+- macOS 上 `bin/comet.js` 等脚本权限修复为 `100755`。
+
+## 0.3.8 — 2026-06-13
+
+### Kimi Code CLI 支持
+
+新增 Kimi Code 为第 29 个支持平台，覆盖 `.kimi-code/` 下的项目/全局 skill 安装、OpenSpec `kimi` 工具集成、Superpowers `kimi-code-cli` 映射与检测（[#90](https://github.com/rpamis/comet/pull/90)）。
+
+### `comet uninstall` 命令
+
+新增 `comet uninstall [path]` 安全移除 Comet 分发的 skills、rules、hooks，支持 `--scope`、`--force`、`--json`。覆盖 29 个平台、7 种 hook 格式、3 种 rule 格式，仅清理 Comet 管理的产物（[#95](https://github.com/rpamis/comet/issues/95)）。
+
+### 子代理调度扩展
+
+把内联的子代理调度协议抽到 `comet/reference/subagent-dispatch.md`（中英双语），基于 Superpowers `subagent-driven-development` 沉淀 Comet 扩展：真实后台调度、每任务持久化 checkpoint、协调者独占源码执行、TDD 由后台代理负责、有限轮次 review-fix、连续执行不暂停。新增 `comet-state task-checkoff <file> <task-text>` 用于任务勾选验证。
+
+### Hook 合并保护
+
+Claude Code / Codex / Amazon Q / Qwen / Qoder / Gemini / Windsurf 的 hook 配置在 init/update 时保留用户已有 hook，按 matcher/event 区分；Comet 自己的命令按 manifest 路径识别并原地替换，避免重复累积。
+
+### 其他
+
+- `comet update --registry https://registry.npmjs.org` 强制走官方源（[#100](https://github.com/rpamis/comet/issues/100)）。
+- 启动时显示版本并检查 npm registry 是否有新版本（[#99](https://github.com/rpamis/comet/issues/99)）。
+- 抽取 `decision-point.md` / `debug-gate.md` / `auto-transition.md` / `context-recovery.md` 等共享参考文档，按需加载降低每次调用的 token 开销。
+- husky + lint-staged pre-commit 自动 prettier。
+- OpenSpec 制品按 `openspec instructions ... --json` 加载 context/rules/template（[#66](https://github.com/rpamis/comet/issues/66)）。
+- Pi slash 命令注册与生命周期（[#89](https://github.com/rpamis/comet/issues/89)）。
+- 符号链接安全的卸载与文件复制（[#85](https://github.com/rpamis/comet/issues/85)）。
+
 ## 0.3.7 — 2026-06-07
 
 ### CodeGraph 语义代码索引

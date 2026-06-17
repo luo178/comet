@@ -51,9 +51,13 @@ function resolveCodegraphCommand(): string | null {
   return resolvePnpmGlobalCommand('codegraph');
 }
 
-async function ensureCodegraphCli(projectPath: string): Promise<string | null> {
+async function ensureCodegraphCli(
+  projectPath: string,
+  shouldInstall = true,
+): Promise<string | null> {
   const existingCommand = resolveCodegraphCommand();
   if (existingCommand) return existingCommand;
+  if (!shouldInstall) return null;
 
   console.log('    Installing CodeGraph CLI...');
   try {
@@ -74,14 +78,19 @@ async function ensureCodegraphCli(projectPath: string): Promise<string | null> {
 async function installCodegraph(
   projectPath: string,
   scope: InstallScope,
+  shouldInstallCli = true,
 ): Promise<'installed' | 'failed' | 'skipped'> {
   if (hasCodegraphProjectIndex(projectPath)) {
     console.log('    CodeGraph: existing .codegraph index detected');
     return 'skipped';
   }
 
-  const codegraphCommand = await ensureCodegraphCli(projectPath);
+  const codegraphCommand = await ensureCodegraphCli(projectPath, shouldInstallCli);
   if (!codegraphCommand) {
+    if (!shouldInstallCli) {
+      console.log('    CodeGraph CLI not installed, skipping setup');
+      return 'skipped';
+    }
     console.error(
       '    CodeGraph CLI not available. Install manually: npm install -g @colbymchenry/codegraph',
     );
