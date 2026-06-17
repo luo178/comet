@@ -235,6 +235,33 @@ project_auto_transition_default() {
   esac
 }
 
+project_review_mode_default() {
+  local value="null"
+  local source="default"
+  if [ -n "${COMET_REVIEW_MODE:-}" ]; then
+    value="$COMET_REVIEW_MODE"
+    source="COMET_REVIEW_MODE"
+  elif [ -f ".comet/config.yaml" ]; then
+    local raw
+    raw=$(yaml_field "review_mode" ".comet/config.yaml" 2>/dev/null || true)
+    if [ -n "$raw" ]; then
+      value="$raw"
+      source=".comet/config.yaml"
+    fi
+  fi
+
+  case "$value" in
+    null|off|standard|thorough)
+      printf '%s\n' "$value"
+      ;;
+    *)
+      red "ERROR: Invalid review_mode from ${source}: '$value'" >&2
+      red "Valid values: off, standard, thorough" >&2
+      exit 1
+      ;;
+  esac
+}
+
 # --- Subcommands ---
 
 cmd_init() {
@@ -267,7 +294,7 @@ cmd_init() {
     full)
       build_mode="null"
       tdd_mode="null"
-      review_mode="null"
+      review_mode="$(project_review_mode_default)"
       isolation="null"
       verify_mode="null"
       ;;

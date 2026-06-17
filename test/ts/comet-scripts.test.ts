@@ -295,6 +295,29 @@ describeShell('comet shell scripts', () => {
     expect(yaml).toContain('context_compression: beta');
   }, 20_000);
 
+  it('snapshots review_mode from .comet/config.yaml when initializing a full change', async () => {
+    await writeFile(path.join(tmpDir, '.comet', 'config.yaml'), 'review_mode: standard\n');
+
+    const result = runBash(tmpDir, stateScript, ['init', 'review-standard', 'full']);
+    const yaml = await fs.readFile(
+      path.join(tmpDir, 'openspec', 'changes', 'review-standard', '.comet.yaml'),
+      'utf-8',
+    );
+
+    expect(result.status).toBe(0);
+    expect(yaml).toContain('review_mode: standard');
+  }, 20_000);
+
+  it('rejects invalid review_mode from .comet/config.yaml when initializing a change', async () => {
+    await writeFile(path.join(tmpDir, '.comet', 'config.yaml'), 'review_mode: noisy\n');
+
+    const result = runBash(tmpDir, stateScript, ['init', 'review-invalid', 'full']);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Invalid review_mode from .comet/config.yaml: 'noisy'");
+    expect(result.stderr).toContain('Valid values: off, standard, thorough');
+  }, 20_000);
+
   it('lets COMET_CONTEXT_COMPRESSION override the project context compression default', async () => {
     await writeFile(path.join(tmpDir, '.comet', 'config.yaml'), 'context_compression: beta\n');
 
