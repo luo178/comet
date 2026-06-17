@@ -629,8 +629,13 @@ archived_is_true() {
 guard_open() {
   echo "=== Guard: open → next ===" >&2
 
+  local workflow
+  workflow=$(yaml_field_value "workflow" 2>/dev/null || true)
+
   check "proposal.md exists and non-empty" file_nonempty "$CHANGE_DIR/proposal.md"
-  check "design.md exists and non-empty" file_nonempty "$CHANGE_DIR/design.md"
+  if [ "$workflow" = "full" ]; then
+    check "design.md exists and non-empty" file_nonempty "$CHANGE_DIR/design.md"
+  fi
   check "tasks.md exists and non-empty" file_nonempty "$CHANGE_DIR/tasks.md"
   check "tasks.md has at least one task" tasks_has_any
 }

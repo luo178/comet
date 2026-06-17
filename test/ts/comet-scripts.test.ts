@@ -3623,6 +3623,86 @@ describeShell('comet shell scripts', () => {
     }, 20_000);
   });
 
+  describe('guard_open skips design.md for hotfix/tweak workflows', () => {
+    it('passes open guard for hotfix workflow without design.md', async () => {
+      await createChange(
+        tmpDir,
+        'hotfix-open-guard',
+        [
+          'workflow: hotfix',
+          'phase: open',
+          'build_mode: direct',
+          'build_pause: null',
+          'subagent_dispatch: null',
+          'tdd_mode: null',
+          'isolation: branch',
+          'verify_mode: light',
+          'design_doc: null',
+          'plan: null',
+          'base_ref: null',
+          'verify_result: pending',
+          'verification_report: null',
+          'branch_status: pending',
+          'created_at: 2026-06-17',
+          'verified_at: null',
+          'archived: false',
+          'handoff_context: null',
+          'handoff_hash: null',
+          '',
+        ].join('\n'),
+      );
+      await fs.rm(path.join(tmpDir, 'openspec/changes/hotfix-open-guard/design.md'));
+
+      const result = spawnSync(
+        bashCommand!,
+        ['-lc', `"${toBashPath(guardScript)}" hotfix-open-guard open`],
+        { cwd: tmpDir, encoding: 'utf-8', timeout: 15000 },
+      );
+
+      expect(result.status, JSON.stringify({ stderr: result.stderr, stdout: result.stdout, error: result.error })).toBe(0);
+      expect(result.stderr).toContain('ALL CHECKS PASSED');
+    }, 20_000);
+
+    it('fails open guard for full workflow without design.md', async () => {
+      await createChange(
+        tmpDir,
+        'full-open-guard',
+        [
+          'workflow: full',
+          'phase: open',
+          'build_mode: null',
+          'build_pause: null',
+          'subagent_dispatch: null',
+          'tdd_mode: null',
+          'isolation: null',
+          'verify_mode: null',
+          'design_doc: null',
+          'plan: null',
+          'base_ref: null',
+          'verify_result: pending',
+          'verification_report: null',
+          'branch_status: pending',
+          'created_at: 2026-06-17',
+          'verified_at: null',
+          'archived: false',
+          'handoff_context: null',
+          'handoff_hash: null',
+          '',
+        ].join('\n'),
+      );
+      await fs.rm(path.join(tmpDir, 'openspec/changes/full-open-guard/design.md'));
+
+      const result = spawnSync(
+        bashCommand!,
+        ['-lc', `"${toBashPath(guardScript)}" full-open-guard open`],
+        { cwd: tmpDir, encoding: 'utf-8', timeout: 15000 },
+      );
+
+      expect(result.status, JSON.stringify({ stderr: result.stderr, stdout: result.stdout, error: result.error })).not.toBe(0);
+      expect(result.stderr).toContain('[FAIL] design.md exists and non-empty');
+    }, 20_000);
+  });
+
   describe('review fix: design guard requires design_doc for full workflow', () => {
     it('fails design guard for full workflow without design_doc (C2)', async () => {
       await createChange(
