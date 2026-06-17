@@ -1512,7 +1512,7 @@ describeShell('comet shell scripts', () => {
     expect(guard.stderr).toContain('[FAIL] review_mode selected');
     expect(guard.stderr).toContain('review_mode must be off, standard, or thorough');
     expect(transition.status).not.toBe(0);
-    expect(transition.stderr).toContain('review_mode must be selected');
+    expect(transition.stderr).toContain('review_mode must be off, standard, or thorough');
   }, 20_000);
 
   it('allows setting review_mode to off, standard, and thorough', async () => {

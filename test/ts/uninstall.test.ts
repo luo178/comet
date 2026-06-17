@@ -429,7 +429,6 @@ vi.mock('@inquirer/prompts', () => ({
 
 import { select, checkbox } from '@inquirer/prompts';
 import { uninstallCommand } from '../../src/commands/uninstall.js';
-import { copyCometSkillsForPlatform } from '../../src/core/skills.js';
 
 const mockedSelect = vi.mocked(select);
 const mockedCheckbox = vi.mocked(checkbox);
@@ -542,7 +541,7 @@ describe('uninstallCommand interactive selection', () => {
     await copyCometSkillsForPlatform(tmpDir, claudePlatform, true, 'skills', 'project');
 
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    let jsonOutput = '';
+    let jsonOutput;
     try {
       await uninstallCommand(tmpDir, { json: true });
       jsonOutput = log.mock.calls.map((c) => c.join(' ')).join('\n');
@@ -559,7 +558,7 @@ describe('uninstallCommand interactive selection', () => {
 
   it('prints message when no targets found', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    let output = '';
+    let output;
     try {
       await uninstallCommand(tmpDir);
       output = log.mock.calls.map((c) => c.join(' ')).join('\n');

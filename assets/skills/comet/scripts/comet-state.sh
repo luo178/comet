@@ -567,9 +567,14 @@ require_build_decisions() {
     exit 1
   fi
 
-  if [ "$workflow" = "full" ] && grep -q "^review_mode:" "$(yaml_file_for "$change_name")" 2>/dev/null && { [ "$review_mode" = "null" ] || [ -z "$review_mode" ]; }; then
-    red "ERROR: Cannot transition '$change_name': review_mode must be selected before leaving build (full workflow)" >&2
-    exit 1
+  if [ "$workflow" = "full" ]; then
+    case "$review_mode" in
+      off|standard|thorough) ;;
+      *)
+        red "ERROR: Cannot transition '$change_name': review_mode must be off, standard, or thorough before leaving build (full workflow), got '${review_mode:-null}'" >&2
+        exit 1
+        ;;
+    esac
   fi
 }
 

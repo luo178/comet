@@ -467,7 +467,6 @@ export async function initCommand(targetPath: string, options: InitOptions = {})
     });
   }
 
-  let cgGlobalStatus: InstallStatus;
   const codegraphAlreadyIndexed = hasCodegraphProjectIndex(projectPath);
 
   // JSON mode never installs CodeGraph interactively (matches pre-i18n behavior).
@@ -478,19 +477,15 @@ export async function initCommand(targetPath: string, options: InitOptions = {})
 
   if (shouldInstallCodegraph) {
     log(`\n  ${t(lang, 'installingCG')}`);
-    cgGlobalStatus = await installCodegraph(projectPath, scope, true);
+    const cgGlobalStatus = await installCodegraph(projectPath, scope, true);
     log(`  CodeGraph: ${cgGlobalStatus}`);
     for (const r of results) {
       r.codegraph = cgGlobalStatus;
     }
   } else if (!options.json && codegraphAlreadyIndexed) {
     log('\n  CodeGraph: skipped (existing .codegraph index detected)');
-    cgGlobalStatus = 'skipped';
   } else if (!options.json) {
     log(`\n  CodeGraph: ${t(lang, 'cgSkippedByUser')}`);
-    cgGlobalStatus = 'skipped';
-  } else {
-    cgGlobalStatus = 'skipped';
   }
 
   if (scope === 'project') {

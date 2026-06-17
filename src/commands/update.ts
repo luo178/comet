@@ -3,7 +3,7 @@ import os from 'os';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-import { checkbox } from '@inquirer/prompts';
+import { select } from '@inquirer/prompts';
 import { fileExists, readDir, readJson } from '../utils/file-system.js';
 import { getBaseDir } from '../core/detect.js';
 import {
@@ -13,12 +13,7 @@ import {
   getManifestSkills,
 } from '../core/skills.js';
 import { PLATFORMS, getPlatformSkillsDir, type Platform } from '../core/platforms.js';
-import {
-  hasCodegraphProjectIndex,
-  installCodegraph,
-  resolveCodegraphCommand,
-} from '../core/codegraph.js';
-import { isCommandAvailable } from '../core/openspec.js';
+import { hasCodegraphProjectIndex, installCodegraph } from '../core/codegraph.js';
 import type { InstallScope } from '../core/types.js';
 import { printVersionInfo } from '../core/version.js';
 import { t, type TranslationKey } from './i18n.js';
@@ -45,8 +40,6 @@ interface DetectTargetsOptions {
   scopes?: InstallScope[];
   globalBaseDir?: string;
 }
-
-type NpmDepId = 'openspec' | 'superpowers' | 'codegraph';
 
 function languageToSkillsDir(language: string | undefined, fallback: SkillLanguage): string {
   return (language ?? fallback) === 'zh' ? 'skills-zh' : 'skills';
@@ -223,66 +216,14 @@ async function updateCometNpmPackage(
   });
 }
 
-interface NpmDepState {
-  id: NpmDepId;
-  installed: boolean;
-}
-
-async function selectNpmDepsForUpdate(
-  projectPath: string,
-  options: UpdateOptions,
-  lang: string,
-): Promise<Set<NpmDepId>> {
-  const openSpecInstalled = isCommandAvailable('openspec');
-  const codegraphInstalled =
-    hasCodegraphProjectIndex(projectPath) || resolveCodegraphCommand() !== null;
-  const superpowersInstalled = isCommandAvailable('skills');
-
-  const states: NpmDepState[] = [
-    { id: 'openspec', installed: openSpecInstalled },
-    { id: 'superpowers', installed: superpowersInstalled },
-    { id: 'codegraph', installed: codegraphInstalled },
-  ];
-
-  const depLabel: Record<NpmDepId, (installed: boolean) => string> = {
-    openspec: (installed) =>
-      installed ? t(lang, 'npmDepOpenSpecInstalled') : t(lang, 'npmDepOpenSpec'),
-    superpowers: (installed) =>
-      installed ? t(lang, 'npmDepSuperpowersInstalled') : t(lang, 'npmDepSuperpowers'),
-    codegraph: (installed) =>
-      installed ? t(lang, 'npmDepCodegraphInstalled') : t(lang, 'npmDepCodegraph'),
-  };
-
-  const depHint: Partial<Record<NpmDepId, string>> = {
-    superpowers: t(lang, 'npmDepSuperpowersHint'),
-  };
-
-  const choices = states.map(({ id, installed }) => {
-    const choice: {
-      name: string;
-      value: NpmDepId;
-      checked: boolean;
-      description?: string;
-    } = {
-      name: depLabel[id](installed),
-      value: id,
-      checked: false,
-    };
-    if (depHint[id]) {
-      choice.description = depHint[id];
-    }
-    return choice;
+async function promptCodegraphInstall(lang: string): Promise<boolean> {
+  return select({
+    message: t(lang, 'installCodegraph'),
+    choices: [
+      { name: t(lang, 'codegraphYes'), value: true },
+      { name: t(lang, 'codegraphNo'), value: false },
+    ],
   });
-
-  if (options.skipNpm) {
-    return new Set();
-  }
-
-  const selected = await checkbox({
-    message: t(lang, 'selectNpmDeps'),
-    choices,
-  });
-  return new Set(selected as NpmDepId[]);
 }
 
 export async function updateCommand(
@@ -438,8 +379,7 @@ export async function updateCommand(
   } else if (codegraphAlreadyIndexed) {
     log('\n  CodeGraph: skipped (existing .codegraph index detected)');
   } else {
-    const selectedNpmDeps = await selectNpmDepsForUpdate(projectPath, options, lang);
-    const shouldInstallCodegraph = selectedNpmDeps.has('codegraph');
+    const shouldInstallCodegraph = options.skipNpm ? false : await promptCodegraphInstall(lang);
 
     if (shouldInstallCodegraph) {
       log(`\n  ${t(lang, 'installingCG')}`);
