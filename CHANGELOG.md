@@ -29,6 +29,8 @@ All notable changes to @rpamis/comet will be documented in this file.
 - **CodeGraph setup detection**: Fixed `comet init` and `comet update` prompting for CodeGraph setup even when the project already has a `.codegraph/` index. Existing project indexes now skip the optional CodeGraph prompt and install step, and CodeGraph CLI resolution can use a pnpm global binary before falling back to npm global installation.
 - **Phase guard auto-transition handoff**: Fixed the injected Comet phase guard rule hardcoding the next skill after `guard --apply`, which could bypass `auto_transition: false`. The rule now delegates post-guard handoff to `comet-state next <change-name>` and follows `NEXT: auto|manual|done` so manual phase boundaries are respected.
 - **Executable permission loss on macOS after update**: `bin/comet.js` and all shell scripts under `assets/skills/comet/scripts/` were committed with git mode `100644` (non-executable). After an npm update, macOS users lost execute permissions on the `comet` CLI entry point. Changed all 8 files to `100755` in git so npm installs always preserve the executable bit.
+- **Preset workflow open transition**: Fixed `comet-state.sh` requiring `design.md` before `hotfix`/`tweak` changes could leave `open`, aligning state transitions with the guard rules that only require `proposal.md` and `tasks.md` for preset workflows.
+- **Review mode build gating**: Fixed `comet-guard.sh` allowing full-workflow changes with a missing `review_mode` field to pass build checks before `comet-state.sh` rejected the transition, so both guard layers now report the same required review-mode decision.
 
 ### Tests
 
@@ -38,6 +40,7 @@ All notable changes to @rpamis/comet will be documented in this file.
 - **Phase guard handoff coverage**: Added skill-rule regression coverage ensuring the phase guard delegates to `comet-state next` and no longer embeds a fixed next-skill mapping that can ignore `auto_transition`.
 - **`review_mode` integration coverage**: Added regression tests verifying `review_mode` is wired through state, guard, and validation scripts, with correct mode-specific behavior in `comet-build`/`comet-verify`/`comet-hotfix`.
 - **Uninstall platform selection coverage**: Added tests for single-target auto-select, multi-target checkbox selection, user cancellation, `--force` skip, `--json` output, and no-targets-found handling.
+- **CI regression coverage**: Added state-machine regression coverage for preset workflows leaving `open` without `design.md`, missing full-workflow `review_mode` being blocked consistently, and repair-only phase resets using `COMET_FORCE_PHASE`.
 
 ## What's Changed [0.3.8] - 2026-06-13
 

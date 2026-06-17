@@ -436,10 +436,6 @@ review_mode_selected() {
     hotfix|tweak) return 0 ;;
   esac
 
-  if ! grep -q "^review_mode:" "$CHANGE_DIR/.comet.yaml" 2>/dev/null; then
-    return 0
-  fi
-
   case "$review_mode" in
     off|standard|thorough) return 0 ;;
     *)

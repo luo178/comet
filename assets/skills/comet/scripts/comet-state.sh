@@ -488,14 +488,19 @@ require_phase() {
 
 require_open_artifacts() {
   local change_name="$1"
-  local change_dir f
+  local change_dir workflow f
   change_dir=$(change_dir_for "$change_name")
-  for f in proposal.md design.md tasks.md; do
+  workflow=$(cmd_get "$change_name" "workflow")
+  for f in proposal.md tasks.md; do
     if [ ! -s "$change_dir/$f" ]; then
       red "ERROR: Cannot transition '$change_name': $f must exist and be non-empty before leaving open" >&2
       exit 1
     fi
   done
+  if [ "$workflow" = "full" ] && [ ! -s "$change_dir/design.md" ]; then
+    red "ERROR: Cannot transition '$change_name': design.md must exist and be non-empty before leaving open" >&2
+    exit 1
+  fi
 }
 
 require_design_evidence() {
@@ -571,7 +576,7 @@ require_build_decisions() {
     case "$review_mode" in
       off|standard|thorough) ;;
       *)
-        red "ERROR: Cannot transition '$change_name': review_mode must be off, standard, or thorough before leaving build (full workflow), got '${review_mode:-null}'" >&2
+        red "ERROR: Cannot transition '$change_name': review_mode must be selected before leaving build (full workflow); review_mode must be off, standard, or thorough, got '${review_mode:-null}'" >&2
         exit 1
         ;;
     esac

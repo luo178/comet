@@ -1763,6 +1763,7 @@ describeShell('comet shell scripts', () => {
         'build_pause: null',
         'subagent_dispatch: confirmed',
         'tdd_mode: tdd',
+        'review_mode: off',
         'isolation: branch',
         'verify_mode: null',
         'design_doc: null',
@@ -2507,6 +2508,7 @@ describeShell('comet shell scripts', () => {
         '',
       ].join('\n'),
     );
+    await fs.rm(path.join(tmpDir, 'openspec/changes/tweak-change/design.md'));
 
     const result = runBash(tmpDir, stateScript, ['transition', 'tweak-change', 'open-complete']);
     const phase = runBash(tmpDir, stateScript, ['get', 'tweak-change', 'phase']);
@@ -2514,6 +2516,45 @@ describeShell('comet shell scripts', () => {
     expect(result.status).toBe(0);
     expect(phase.stdout.trim()).toBe('build');
   });
+
+  it('blocks full workflow build completion when review_mode is missing', async () => {
+    await createChange(
+      tmpDir,
+      'missing-review-field',
+      [
+        'workflow: full',
+        'phase: build',
+        'build_mode: executing-plans',
+        'build_pause: null',
+        'subagent_dispatch: null',
+        'tdd_mode: tdd',
+        'isolation: branch',
+        'verify_mode: light',
+        'design_doc: null',
+        'plan: null',
+        'base_ref: null',
+        'verify_result: pending',
+        'verification_report: null',
+        'branch_status: pending',
+        'created_at: 2026-06-04',
+        'verified_at: null',
+        'archived: false',
+        '',
+      ].join('\n'),
+    );
+
+    const guard = runBash(tmpDir, guardScript, ['missing-review-field', 'build']);
+    const transition = runBash(tmpDir, stateScript, [
+      'transition',
+      'missing-review-field',
+      'build-complete',
+    ]);
+
+    expect(guard.status).not.toBe(0);
+    expect(guard.stderr).toContain('review_mode must be off, standard, or thorough');
+    expect(transition.status).not.toBe(0);
+    expect(transition.stderr).toContain('review_mode must be selected before leaving build');
+  }, 20_000);
 
   it('blocks open-complete when an open artifact is missing', async () => {
     await createChange(
@@ -2641,7 +2682,10 @@ describeShell('comet shell scripts', () => {
     expect(failedResult.stdout.trim()).toBe('fail');
     expect(failedBranchStatus.stdout.trim()).toBe('pending');
 
-    runBash(tmpDir, stateScript, ['set', 'verify-change', 'phase', 'verify']);
+    const forceVerify = runBash(tmpDir, stateScript, ['set', 'verify-change', 'phase', 'verify'], {
+      COMET_FORCE_PHASE: '1',
+    });
+    expect(forceVerify.status).toBe(0);
     runBash(tmpDir, stateScript, ['set', 'verify-change', 'verify_result', 'pending']);
     await writeFile(
       path.join(tmpDir, 'docs', 'superpowers', 'reports', 'verify-change.md'),
@@ -3079,10 +3123,11 @@ describeShell('comet shell scripts', () => {
           'workflow: full',
           'phase: build',
           'build_mode: subagent-driven-development',
-          'build_pause: null',
-          'subagent_dispatch: null',
-          'tdd_mode: tdd',
-          'isolation: branch',
+        'build_pause: null',
+        'subagent_dispatch: null',
+        'tdd_mode: tdd',
+        'review_mode: off',
+        'isolation: branch',
           'verify_mode: null',
           'design_doc: null',
           'plan: docs/superpowers/plans/subagent-plan.md',
@@ -3425,6 +3470,7 @@ describeShell('comet shell scripts', () => {
           'build_pause: null',
           'subagent_dispatch: null',
           'tdd_mode: tdd',
+          'review_mode: off',
           'isolation: branch',
           'verify_mode: light',
           'design_doc: null',
